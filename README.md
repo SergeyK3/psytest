@@ -1,13 +1,10 @@
 # psytest
 
-Психологическое тестирование (PAEI, HEXACO, DISC) на Python.  
-Каркас проекта с вопросниками, интерпретациями и генерацией отчётов.
+Минимальный каркас системы психологического тестирования (PAEI, HEXACO, DISC).
 
-## Установка
-
+## Быстрый старт
 ```bash
-git clone https://github.com/SergeyK3/psytest.git
-cd psytest
-python -m venv .venv
-.venv\Scripts\activate      # Windows
-pip install -r requirements.txt
+pip install pandas numpy pydantic streamlit python-docx
+python -m psytest.cli_main
+streamlit run src/psytest/web_app.py
+```

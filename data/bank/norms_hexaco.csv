@@ -1,0 +1,2 @@
+test_id,scale,sex,age_min,age_max,mean,sd,p10,p25,p50,p75,p90
+HEXACO,H,all,18,65,3.2,0.6,2.4,2.8,3.2,3.6,3.9
