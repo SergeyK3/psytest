@@ -28,6 +28,11 @@ Thumbs.db
 out_report.docx
 *.pdf
 
+# Generated reports directory (для анализа, но не для Git)
+docs/reports/
+docs/user_reports/
+docs/test_results/
+
 # Test reports (generated)
 test_reports/
 

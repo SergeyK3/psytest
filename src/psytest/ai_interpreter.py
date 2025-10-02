@@ -69,10 +69,31 @@ class AIInterpreter:
         Returns:
             Текст интерпретации
         """
-        system_prompt = load_prompt("adizes_system.txt")
+        system_prompt = load_prompt("adizes_system_res.txt")
         
         scores_text = ", ".join([f"{k}: {v}" for k, v in scores.items()])
         user_prompt = f"Проанализируй результаты теста PAEI: {scores_text}"
+        
+        if dialog_context:
+            user_prompt += f"\n\nКонтекст диалога: {dialog_context}"
+        
+        return self._make_request(system_prompt, user_prompt)
+    
+    def interpret_adizes(self, choices: list, dialog_context: str = "") -> str:
+        """
+        Интерпретация результатов теста Адизеса на основе выборов
+        
+        Args:
+            choices: Список выборов пользователя ['P', 'A', 'E', 'I']
+            dialog_context: Контекст диалога (если есть)
+            
+        Returns:
+            Текст интерпретации
+        """
+        system_prompt = load_prompt("adizes_system_res.txt")
+        
+        choices_text = ", ".join(choices)
+        user_prompt = f"Проанализируй выборы в тесте Адизеса: {choices_text}"
         
         if dialog_context:
             user_prompt += f"\n\nКонтекст диалога: {dialog_context}"
@@ -90,7 +111,7 @@ class AIInterpreter:
         Returns:
             Текст интерпретации
         """
-        system_prompt = load_prompt("disc_system.txt")
+        system_prompt = load_prompt("disk_system_res.txt")
         
         scores_text = ", ".join([f"{k}: {v}" for k, v in scores.items()])
         user_prompt = f"Проанализируй результаты теста DISC: {scores_text}"
@@ -111,7 +132,7 @@ class AIInterpreter:
         Returns:
             Текст интерпретации
         """
-        system_prompt = load_prompt("hexaco_system.txt")
+        system_prompt = load_prompt("hexaco_system_res.txt")
         
         scores_text = ", ".join([f"{k}: {v}" for k, v in scores.items()])
         user_prompt = f"Проанализируй результаты теста HEXACO: {scores_text}"

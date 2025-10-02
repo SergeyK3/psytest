@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Улучшенный модуль для создания PDF отчётов с детальными описаниями
-Версия 2.0 с расширенным контентом и правильной последовательностью тестов
+Улучшенный модуль для создания PDF отчётов с детальными описани            if "Arial-Bold" in fonts_registered:
+                DesignConfig.HEADER_FONT = "Arial-Bold"
+                print("[INFO] Используется Arial-Bold для заголовков")
+            elif "Times-Bold" in fonts_registered:
+                DesignConfig.HEADER_FONT = "Times-Bold"
+                print("[INFO] Используется Times-Bold для заголовков")
+            else:
+                DesignConfig.HEADER_FONT = "Times-Bold"
+                print("[INFO] Используется встроенный Times-Bold для заголовков")ия 2.0 с расширенным контентом и правильной последовательностью тестов
 """
 
 from pathlib import Path
@@ -60,14 +67,16 @@ class EnhancedCharts:
     @staticmethod
     def create_minimalist_radar(labels: List[str], values: List[float], 
                                title: str, out_path: Path) -> Path:
-        """Создаёт минималистичную радарную диаграмму"""
-        return make_radar(labels, values, out_path, title=title, max_value=10)
+        """Создаёт минималистичную радарную диаграмму с автоматической нормализацией"""
+        return make_radar(labels, values, out_path, title=title, 
+                         normalize=True, normalize_method="adaptive")
     
     @staticmethod
     def create_minimalist_bar_chart(labels: List[str], values: List[float],
                                    title: str, out_path: Path) -> Path:
-        """Создаёт минималистичную столбчатую диаграмму"""
-        return make_bar_chart(labels, values, out_path, title=title, max_value=10)
+        """Создаёт минималистичную столбчатую диаграмму с автоматической нормализацией"""
+        return make_bar_chart(labels, values, out_path, title=title, 
+                             normalize=True, normalize_method="adaptive")
 
 
 class EnhancedPDFReportV2:
@@ -101,37 +110,37 @@ class EnhancedPDFReportV2:
                     try:
                         pdfmetrics.registerFont(TTFont(font_name, font_path))
                         fonts_registered[font_name] = True
-                        print(f"✅ Зарегистрирован шрифт: {font_name}")
+                        print(f"[OK] Зарегистрирован шрифт: {font_name}")
                     except Exception as e:
-                        print(f"⚠️  Ошибка регистрации {font_name}: {e}")
+                        print(f"[WARN] Ошибка регистрации {font_name}: {e}")
             
             # Устанавливаем шрифты в зависимости от того, что удалось зарегистрировать
             if "Arial-Regular" in fonts_registered:
                 DesignConfig.BODY_FONT = "Arial-Regular"
                 DesignConfig.SMALL_FONT = "Arial-Regular"
-                print("📝 Используется Arial для основного текста")
+                print("[INFO] Используется Arial для основного текста")
             else:
                 DesignConfig.BODY_FONT = "Times-Roman"
                 DesignConfig.SMALL_FONT = "Times-Roman"
-                print("📝 Используется Times-Roman для основного текста")
+                print("[INFO] Используется Times-Roman для основного текста")
             
             if "Arial-Bold" in fonts_registered:
                 DesignConfig.TITLE_FONT = "Arial-Bold"
-                print("📝 Используется Arial-Bold для заголовков")
+                print("[INFO] Используется Arial-Bold для заголовков")
             elif "Times-Bold" in fonts_registered:
                 DesignConfig.TITLE_FONT = "Times-Bold"
-                print("📝 Используется Times-Bold для заголовков")
+                print("[INFO] Используется Times-Bold для заголовков")
             else:
                 DesignConfig.TITLE_FONT = "Times-Bold"
-                print("📝 Используется встроенный Times-Bold для заголовков")
+                print("[INFO] Используется встроенный Times-Bold для заголовков")
                 
         except Exception as e:
-            print(f"⚠️  Ошибка настройки шрифтов: {e}")
+            print(f"[WARN] Ошибка настройки шрифтов: {e}")
             # В случае ошибки используем встроенные шрифты
             DesignConfig.TITLE_FONT = "Times-Bold"
             DesignConfig.BODY_FONT = "Times-Roman"
             DesignConfig.SMALL_FONT = "Times-Roman"
-            print("📝 Используются встроенные шрифты Times")
+            print("[INFO] Используются встроенные шрифты Times")
     
     def _add_chart_to_story(self, story, chart_path: Path, width: int = None, height: int = None):
         """Добавляет диаграмму в документ с оптимизированными размерами"""
@@ -149,7 +158,7 @@ class EnhancedPDFReportV2:
                 story.append(img)
                 story.append(Spacer(1, 5*mm))
             except Exception as e:
-                print(f"⚠️  Ошибка при добавлении диаграммы {chart_path}: {e}")
+                print(f"[WARN] Ошибка при добавлении диаграммы {chart_path}: {e}")
                 # Добавляем плейсхолдер
                 story.append(Paragraph(f"[Диаграмма: {chart_path.name}]", self._get_custom_styles()['Body']))
                 story.append(Spacer(1, 5*mm))
@@ -320,6 +329,11 @@ class EnhancedPDFReportV2:
         story.append(Paragraph(soft_results, styles['Body']))
         story.append(Spacer(1, 3*mm))
         
+        # AI интерпретация Soft Skills
+        if 'soft_skills' in ai_interpretations:
+            story.append(Spacer(1, 3*mm))
+            story.append(Paragraph(ai_interpretations['soft_skills'], styles['Body']))
+        
         # Встраиваем диаграмму Soft Skills
         if 'soft_skills' in chart_paths:
             self._add_chart_to_story(story, chart_paths['soft_skills'])
@@ -397,7 +411,7 @@ class EnhancedPDFReportV2:
         """Создаёт все радарные диаграммы для отчета"""
         charts = {}
         
-        # PAEI диаграмма (радарная)
+        # PAEI диаграмма (радарная) - данные уже в шкале 1-10
         paei_labels = list(paei_scores.keys())
         paei_values = list(paei_scores.values())
         paei_path = self.template_dir / "paei_radar.png"
@@ -413,7 +427,7 @@ class EnhancedPDFReportV2:
                                              "Soft Skills", soft_radar_path)
         charts['soft_skills'] = soft_radar_path
         
-        # HEXACO диаграмма (радарная)
+        # HEXACO диаграмма (радарная) - данные уже в шкале 1-10
         hexaco_labels = list(hexaco_scores.keys())
         hexaco_values = list(hexaco_scores.values())
         hexaco_path = self.template_dir / "hexaco_radar.png"
@@ -421,7 +435,7 @@ class EnhancedPDFReportV2:
                                              "HEXACO", hexaco_path)
         charts['hexaco'] = hexaco_path
         
-        # DISC диаграмма (радарная)  
+        # DISC диаграмма (радарная) - данные уже в шкале 1-10
         disc_labels = list(disc_scores.keys())
         disc_values = list(disc_scores.values())
         disc_path = self.template_dir / "disc_radar.png"

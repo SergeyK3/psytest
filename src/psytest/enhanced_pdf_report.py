@@ -58,14 +58,16 @@ class EnhancedCharts:
     @staticmethod
     def create_minimalist_radar(labels: List[str], values: List[float], 
                                title: str, out_path: Path) -> Path:
-        """Создаёт минималистичную радарную диаграмму"""
-        return make_radar(labels, values, out_path, title=title, max_value=10)
+        """Создаёт минималистичную радарную диаграмму с автоматической нормализацией"""
+        return make_radar(labels, values, out_path, title=title, 
+                         normalize=True, normalize_method="adaptive")
     
     @staticmethod
     def create_minimalist_bar_chart(labels: List[str], values: List[float],
                                    title: str, out_path: Path) -> Path:
-        """Создаёт минималистичную столбчатую диаграмму"""
-        return make_bar_chart(labels, values, out_path, title=title, max_value=10)
+        """Создаёт минималистичную столбчатую диаграмму с автоматической нормализацией"""
+        return make_bar_chart(labels, values, out_path, title=title, 
+                             normalize=True, normalize_method="adaptive")
 
 
 class EnhancedPDFReport:
