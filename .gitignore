@@ -28,6 +28,9 @@ Thumbs.db
 out_report.docx
 *.pdf
 
+# Test reports (generated)
+test_reports/
+
 # Streamlit cache
 .streamlit/
 
@@ -36,3 +39,9 @@ notes.txt
 
 # Local notebooks
 docs/Тестирование_психолог_версия_24_01_2025.ipynb
+
+# Example files (not for commit)
+docs/Психологический портрет КимСВ.docx
+
+# Configuration examples (template files)
+!.env.example

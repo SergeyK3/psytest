@@ -64,6 +64,14 @@ def render_report(scores_raw: Dict[str, float],
 
     doc.add_paragraph()
     doc.add_paragraph("⚠️ Результаты носят ознакомительный характер и не заменяют профессиональную диагностику.")
+    
+    # Добавляем информацию об использовании AI (если используется)
+    if hasattr(render_report, '_uses_ai') and render_report._uses_ai:
+        doc.add_paragraph()
+        doc.add_paragraph(
+            "🤖 Интерпретации результатов сгенерированы с помощью OpenAI GPT-3.5. "
+            "Powered by OpenAI (https://openai.com)"
+        )
 
     doc.save(str(out_path))
     return out_path
