@@ -29,6 +29,7 @@ from datetime import datetime
 import numpy as np
 
 from src.psytest.charts import make_radar, make_bar_chart
+from scale_normalizer import ScaleNormalizer
 
 # Константы для минималистичного дизайна
 class DesignConfig:
@@ -62,21 +63,27 @@ class DesignConfig:
 
 
 class EnhancedCharts:
-    """Класс для создания улучшенных диаграмм"""
+    """Класс для создания улучшенных диаграмм с правильными максимальными значениями"""
     
     @staticmethod
     def create_minimalist_radar(labels: List[str], values: List[float], 
-                               title: str, out_path: Path) -> Path:
-        """Создаёт минималистичную радарную диаграмму с автоматической нормализацией"""
+                               title: str, out_path: Path, max_value: float = None) -> Path:
+        """Создаёт минималистичную радарную диаграмму без нормализации"""
+        # Используем переданное максимальное значение или автоматически определяем
+        if max_value is None:
+            max_value = max(values) * 1.1  # Добавляем 10% отступ
         return make_radar(labels, values, out_path, title=title, 
-                         normalize=True, normalize_method="adaptive")
+                         normalize=False, max_value=int(max_value))
     
     @staticmethod
     def create_minimalist_bar_chart(labels: List[str], values: List[float],
-                                   title: str, out_path: Path) -> Path:
-        """Создаёт минималистичную столбчатую диаграмму с автоматической нормализацией"""
+                                   title: str, out_path: Path, max_value: float = None) -> Path:
+        """Создаёт минималистичную столбчатую диаграмму без нормализации"""
+        # Используем переданное максимальное значение или автоматически определяем
+        if max_value is None:
+            max_value = max(values) * 1.1  # Добавляем 10% отступ
         return make_bar_chart(labels, values, out_path, title=title, 
-                             normalize=True, normalize_method="adaptive")
+                             normalize=False, max_value=int(max_value))
 
 
 class EnhancedPDFReportV2:
@@ -411,36 +418,40 @@ class EnhancedPDFReportV2:
         """Создаёт все радарные диаграммы для отчета"""
         charts = {}
         
-        # PAEI диаграмма (радарная) - данные уже в шкале 1-10
+        # PAEI диаграмма (столбиковая) - шкала 0-5
         paei_labels = list(paei_scores.keys())
         paei_values = list(paei_scores.values())
-        paei_path = self.template_dir / "paei_radar.png"
-        EnhancedCharts.create_minimalist_radar(paei_labels, paei_values, 
-                                             "PAEI (Адизес)", paei_path)
+        paei_path = self.template_dir / "paei_bar.png"
+        EnhancedCharts.create_minimalist_bar_chart(paei_labels, paei_values, 
+                                                 "PAEI (Адизес)", paei_path, 
+                                                 max_value=ScaleNormalizer.get_max_scale("PAEI"))
         charts['paei'] = paei_path
         
-        # Soft Skills диаграмма (радарная)
+        # Soft Skills диаграмма (радарная) - шкала 1-10
         soft_labels = list(soft_skills_scores.keys())
         soft_values = list(soft_skills_scores.values())
         soft_radar_path = self.template_dir / "soft_skills_radar.png"
         EnhancedCharts.create_minimalist_radar(soft_labels, soft_values,
-                                             "Soft Skills", soft_radar_path)
+                                             "Soft Skills", soft_radar_path,
+                                             max_value=ScaleNormalizer.get_max_scale("SOFT_SKILLS"))
         charts['soft_skills'] = soft_radar_path
         
-        # HEXACO диаграмма (радарная) - данные уже в шкале 1-10
+        # HEXACO диаграмма (радарная) - шкала 1-5
         hexaco_labels = list(hexaco_scores.keys())
         hexaco_values = list(hexaco_scores.values())
         hexaco_path = self.template_dir / "hexaco_radar.png"
         EnhancedCharts.create_minimalist_radar(hexaco_labels, hexaco_values,
-                                             "HEXACO", hexaco_path)
+                                             "HEXACO", hexaco_path,
+                                             max_value=ScaleNormalizer.get_max_scale("HEXACO"))
         charts['hexaco'] = hexaco_path
         
-        # DISC диаграмма (радарная) - данные уже в шкале 1-10
+        # DISC диаграмма (столбиковая) - шкала 0-8
         disc_labels = list(disc_scores.keys())
         disc_values = list(disc_scores.values())
-        disc_path = self.template_dir / "disc_radar.png"
-        EnhancedCharts.create_minimalist_radar(disc_labels, disc_values,
-                                             "DISC", disc_path)
+        disc_path = self.template_dir / "disc_bar.png"
+        EnhancedCharts.create_minimalist_bar_chart(disc_labels, disc_values,
+                                                 "DISC", disc_path,
+                                                 max_value=ScaleNormalizer.get_max_scale("DISC"))
         charts['disc'] = disc_path
         
         return charts

@@ -308,12 +308,12 @@ class EnhancedPDFReport:
         """Создаёт все диаграммы для отчета"""
         charts = {}
         
-        # PAEI диаграмма (радарная)
+        # PAEI диаграмма (столбиковая)
         paei_labels = list(paei_scores.keys())
         paei_values = list(paei_scores.values())
-        paei_path = self.template_dir / "paei_radar.png"
-        EnhancedCharts.create_minimalist_radar(paei_labels, paei_values, 
-                                             "PAEI (Адизес)", paei_path)
+        paei_path = self.template_dir / "paei_bar.png"
+        EnhancedCharts.create_minimalist_bar_chart(paei_labels, paei_values, 
+                                                 "PAEI (Адизес)", paei_path)
         charts['paei'] = paei_path
         
         # Soft Skills диаграмма (радарная)
@@ -332,12 +332,12 @@ class EnhancedPDFReport:
                                              "HEXACO", hexaco_path)
         charts['hexaco'] = hexaco_path
         
-        # DISC диаграмма (радарная)  
+        # DISC диаграмма (столбиковая)  
         disc_labels = list(disc_scores.keys())
         disc_values = list(disc_scores.values())
-        disc_path = self.template_dir / "disc_radar.png"
-        EnhancedCharts.create_minimalist_radar(disc_labels, disc_values,
-                                             "DISC", disc_path)
+        disc_path = self.template_dir / "disc_bar.png"
+        EnhancedCharts.create_minimalist_bar_chart(disc_labels, disc_values,
+                                                 "DISC", disc_path)
         charts['disc'] = disc_path
         
         return charts
