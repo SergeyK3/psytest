@@ -17,7 +17,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 # Импорты наших модулей
 from enhanced_pdf_report_v2 import EnhancedPDFReportV2
 from src.psytest.ai_interpreter import get_ai_interpreter
-from test_scenarios import TEST_SCENARIOS
+from tests.test_scenarios import TEST_SCENARIOS
 from report_archiver import save_report_copy
 from scale_normalizer import ScaleNormalizer
 
@@ -420,7 +420,10 @@ async def ask_disc_question(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     user_id = update.effective_user.id
     session = user_sessions[user_id]
     
+    logger.info(f"📋 ask_disc_question: current_question={session.current_question}, len={len(DISC_QUESTIONS)}")
+    
     if session.current_question >= len(DISC_QUESTIONS):
+        logger.info(f"🎯 DISC завершен! Запускаем HEXACO тест")
         return await start_hexaco_test(update, context)
     
     question_data = DISC_QUESTIONS[session.current_question]
@@ -430,6 +433,8 @@ async def ask_disc_question(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         keyboard.append([f"{key}. {answer}"])
     
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    
+    logger.info(f"❓ Отправляем DISC вопрос {session.current_question + 1}/{len(DISC_QUESTIONS)}")
     
     await update.message.reply_text(
         f"🎭 <b>DISC - Вопрос {session.current_question + 1}/{len(DISC_QUESTIONS)}</b>\n\n"
@@ -446,13 +451,25 @@ async def handle_disc_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     session = user_sessions[user_id]
     answer_text = update.message.text
     
+    # Добавляем подробное логирование
+    logger.info(f"📝 DISC ответ от {user_id}: '{answer_text}'")
+    logger.info(f"📊 Текущий вопрос: {session.current_question + 1}/{len(DISC_QUESTIONS)}")
+    
     answer_code = answer_text[0] if answer_text else ""
+    logger.info(f"🔤 Код ответа: '{answer_code}'")
     
     if answer_code in ["D", "I", "S", "C"]:
         session.disc_scores[answer_code] += 1
         session.current_question += 1
+        logger.info(f"✅ Ответ принят. Новый current_question: {session.current_question}")
+        logger.info(f"📈 Счет DISC: {session.disc_scores}")
+        
+        if session.current_question >= len(DISC_QUESTIONS):
+            logger.info(f"🎯 DISC завершен! Переходим к HEXACO")
+        
         return await ask_disc_question(update, context)
     else:
+        logger.warning(f"❌ Неверный ответ DISC: '{answer_text}' -> '{answer_code}'")
         await update.message.reply_text("❗ Пожалуйста, выберите один из предложенных вариантов")
         return DISC_TESTING
 
@@ -460,6 +477,10 @@ async def start_hexaco_test(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     """Начинает тест HEXACO"""
     user_id = update.effective_user.id
     session = user_sessions[user_id]
+    
+    logger.info(f"🧠 Начинаем HEXACO тест для пользователя {user_id}")
+    logger.info(f"📊 Финальные результаты DISC: {session.disc_scores}")
+    
     session.current_test = "HEXACO"
     session.current_question = 0
     
@@ -475,6 +496,7 @@ async def start_hexaco_test(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         parse_mode='HTML'
     )
     
+    logger.info(f"📝 Переходим к первому вопросу HEXACO")
     return await ask_hexaco_question(update, context)
 
 async def ask_hexaco_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -735,8 +757,13 @@ async def generate_user_report(session: UserSession) -> str:
                           f"Результаты Soft Skills: {session.soft_skills_scores}"
         }
     
-    # Путь для сохранения PDF
-    pdf_path = Path(temp_dir) / f"report_{session.user_id}_{int(datetime.now().timestamp())}.pdf"
+    # Путь для сохранения PDF в папку docs/
+    docs_dir = Path("docs")
+    docs_dir.mkdir(exist_ok=True)
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    filename = f"{timestamp}_{session.name.replace(' ', '_') if session.name else 'TelegramUser'}_tg_{str(session.user_id)[-4:]}.pdf"
+    pdf_path = docs_dir / filename
     
     # Нормализуем баллы к единой шкале 0-10
     paei_normalized, paei_method = ScaleNormalizer.auto_normalize("PAEI", session.paei_scores)
@@ -762,28 +789,31 @@ async def generate_user_report(session: UserSession) -> str:
         out_path=pdf_path
     )
     
-    # Сохраняем копию отчета в локальную папку для анализа
-    try:
-        user_info = {
-            "telegram_id": session.user_id,
-            "name": session.name if session.name else "TelegramUser"
-        }
-        
-        # Определяем доминирующий тест для имени файла (используем нормализованные значения)
-        max_paei = max(paei_normalized.values()) if paei_normalized else 0
-        max_disc = max(disc_normalized.values()) if disc_normalized else 0
-        
-        if max_paei >= max_disc:
-            test_type = f"PAEI_{max(paei_normalized, key=paei_normalized.get)}"
-        else:
-            test_type = f"DISC_{max(disc_normalized, key=disc_normalized.get)}"
-        
-        archived_path = save_report_copy(pdf_path, test_type, user_info)
-        if archived_path:
-            logger.info(f"📁 Отчет архивирован: {archived_path.name}")
-        
-    except Exception as e:
-        logger.warning(f"⚠️ Не удалось архивировать отчет: {e}")
+    # Отчет уже сохранен в docs/, дополнительное архивирование не требуется
+    logger.info(f"📁 Отчет сохранен: {pdf_path.name}")
+    
+    # (Архивирование отключено, так как файл уже в правильном месте)
+    # try:
+    #     user_info = {
+    #         "telegram_id": session.user_id,
+    #         "name": session.name if session.name else "TelegramUser"
+    #     }
+    #     
+    #     # Определяем доминирующий тест для имени файла (используем нормализованные значения)
+    #     max_paei = max(paei_normalized.values()) if paei_normalized else 0
+    #     max_disc = max(disc_normalized.values()) if disc_normalized else 0
+    #     
+    #     if max_paei >= max_disc:
+    #         test_type = f"PAEI_{max(paei_normalized, key=paei_normalized.get)}"
+    #     else:
+    #         test_type = f"DISC_{max(disc_normalized, key=disc_normalized.get)}"
+    #     
+    #     archived_path = save_report_copy(pdf_path, test_type, user_info)
+    #     if archived_path:
+    #         logger.info(f"📁 Отчет архивирован: {archived_path.name}")
+    #     
+    # except Exception as e:
+    #     logger.warning(f"⚠️ Не удалось архивировать отчет: {e}")
     
     return str(pdf_path)
 

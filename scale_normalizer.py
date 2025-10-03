@@ -6,78 +6,36 @@
 from typing import Dict, Tuple
 
 class ScaleNormalizer:
-    """Нормализатор шкал для приведения к единому масштабу"""
+    """Нормализатор шкал с правильными максимальными значениями для каждого теста"""
     
-    # Максимальные баллы для каждого типа теста
+    # Максимальные баллы для каждого типа теста (без нормализации)
     MAX_SCORES = {
-        "PAEI": 5,    # 5 вопросов с альтернативным выбором
-        "DISC": 6,    # 6 вопросов с альтернативным выбором  
-        "HEXACO": 5,  # Шкала 1-5
-        "SOFT_SKILLS": 10  # Шкала 1-10
+        "PAEI": 5,        # 5 вопросов с альтернативным выбором
+        "DISC": 8,        # максимальная шкала 8
+        "HEXACO": 5,      # максимальная оценка 5
+        "SOFT_SKILLS": 10 # максимальная оценка 10
     }
     
-    TARGET_MAX = 10  # Целевая максимальная шкала
-    
     @staticmethod
-    def normalize_alternative_choice(scores: Dict[str, float], max_questions: int) -> Dict[str, float]:
-        """
-        Нормализует баллы альтернативного выбора (PAEI, DISC) к шкале 0-10
-        
-        Args:
-            scores: Исходные баллы (количество выборов)
-            max_questions: Максимальное количество вопросов
-            
-        Returns:
-            Нормализованные баллы к шкале 0-10 (округленные до 1 знака)
-        """
-        normalized = {}
-        for key, count in scores.items():
-            # Нормализуем: (count / max_questions) * 10
-            value = (count / max_questions) * ScaleNormalizer.TARGET_MAX
-            normalized[key] = round(value, 1)  # Округляем до 1 десятичного знака
-        return normalized
-    
-    @staticmethod
-    def normalize_rating_scale(scores: Dict[str, float], original_min: int, original_max: int) -> Dict[str, float]:
-        """
-        Нормализует баллы рейтинговой шкалы к шкале 0-10
-        
-        Args:
-            scores: Исходные баллы
-            original_min: Минимум исходной шкалы
-            original_max: Максимум исходной шкалы
-            
-        Returns:
-            Нормализованные баллы к шкале 0-10 (округленные до 1 знака)
-        """
-        normalized = {}
-        original_range = original_max - original_min
-        
-        for key, value in scores.items():
-            # Переводим в 0-10: ((value - min) / range) * 10
-            normalized_value = ((value - original_min) / original_range) * ScaleNormalizer.TARGET_MAX
-            clamped_value = max(0, min(10, normalized_value))  # Ограничиваем 0-10
-            normalized[key] = round(clamped_value, 1)  # Округляем до 1 десятичного знака
-            
-        return normalized
+    def get_max_scale(test_type: str) -> int:
+        """Возвращает максимальное значение шкалы для типа теста"""
+        return ScaleNormalizer.MAX_SCORES.get(test_type.upper(), 10)
     
     @staticmethod 
     def normalize_paei(scores: Dict[str, float]) -> Tuple[Dict[str, float], str]:
-        """Нормализует PAEI баллы"""
-        normalized = ScaleNormalizer.normalize_alternative_choice(
-            scores, ScaleNormalizer.MAX_SCORES["PAEI"]
-        )
-        method = f"PAEI: {ScaleNormalizer.MAX_SCORES['PAEI']} вопросов → 0-10"
-        return normalized, method
+        """Возвращает PAEI баллы без нормализации (шкала 0-5)"""
+        # Возвращаем оригинальные значения, округленные до 1 знака
+        original_scores = {k: round(v, 1) for k, v in scores.items()}
+        method = "PAEI: оригинальная шкала 0-5 (без нормализации)"
+        return original_scores, method
     
     @staticmethod
     def normalize_disc(scores: Dict[str, float]) -> Tuple[Dict[str, float], str]:
-        """Нормализует DISC баллы"""
-        normalized = ScaleNormalizer.normalize_alternative_choice(
-            scores, ScaleNormalizer.MAX_SCORES["DISC"]
-        )
-        method = f"DISC: {ScaleNormalizer.MAX_SCORES['DISC']} вопросов → 0-10"
-        return normalized, method
+        """Возвращает DISC баллы без нормализации (шкала 0-8)"""
+        # Возвращаем оригинальные значения, округленные до 1 знака
+        original_scores = {k: round(v, 1) for k, v in scores.items()}
+        method = "DISC: оригинальная шкала 0-8 (без нормализации)"
+        return original_scores, method
     
     @staticmethod
     def normalize_hexaco(scores: Dict[str, float]) -> Tuple[Dict[str, float], str]:
@@ -125,15 +83,32 @@ def test_scale_normalizer():
     """Быстрый тест нормализатора"""
     print("🧪 Тест ScaleNormalizer")
     
-    # Проблемные случаи
-    paei_extreme = {"P": 1, "A": 5, "E": 0, "I": 0}
-    disc_extreme = {"D": 6, "I": 0, "S": 1, "C": 0}
+    # Тестовые данные для проверки
+    paei_test = {"P": 1, "A": 5, "E": 0, "I": 0}
+    disc_test = {"D": 6, "I": 0, "S": 1, "C": 0}
+    hexaco_test = {"H": 3.5, "E": 4.2, "X": 2.8, "A": 4.0, "C": 3.1, "O": 3.7}
+    soft_skills_test = {"Лидерство": 8.5, "Коммуникация": 7.2, "Аналитика": 9.1}
     
-    paei_norm, paei_method = ScaleNormalizer.auto_normalize("PAEI", paei_extreme)
-    disc_norm, disc_method = ScaleNormalizer.auto_normalize("DISC", disc_extreme)
+    paei_norm, paei_method = ScaleNormalizer.auto_normalize("PAEI", paei_test)
+    disc_norm, disc_method = ScaleNormalizer.auto_normalize("DISC", disc_test)
+    hexaco_norm, hexaco_method = ScaleNormalizer.auto_normalize("HEXACO", hexaco_test)
+    soft_norm, soft_method = ScaleNormalizer.auto_normalize("SOFT_SKILLS", soft_skills_test)
     
-    print(f"PAEI {paei_extreme} → {paei_norm} ({paei_method})")
-    print(f"DISC {disc_extreme} → {disc_norm} ({disc_method})")
+    print(f"PAEI {paei_test} → {paei_norm}")
+    print(f"  Метод: {paei_method}")
+    print(f"  Макс шкала: {ScaleNormalizer.get_max_scale('PAEI')}")
+    
+    print(f"DISC {disc_test} → {disc_norm}")
+    print(f"  Метод: {disc_method}")
+    print(f"  Макс шкала: {ScaleNormalizer.get_max_scale('DISC')}")
+    
+    print(f"HEXACO → {hexaco_norm}")
+    print(f"  Метод: {hexaco_method}")
+    print(f"  Макс шкала: {ScaleNormalizer.get_max_scale('HEXACO')}")
+    
+    print(f"SOFT_SKILLS → {soft_norm}")
+    print(f"  Метод: {soft_method}")
+    print(f"  Макс шкала: {ScaleNormalizer.get_max_scale('SOFT_SKILLS')}")
     
     return True
 

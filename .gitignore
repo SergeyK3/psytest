@@ -28,25 +28,11 @@ Thumbs.db
 out_report.docx
 *.pdf
 
-# Generated reports directory (для анализа, но не для Git)
-docs/reports/
-docs/user_reports/
-docs/test_results/
+# Вся папка docs/ исключена из репозитория (содержит все PDF отчеты и анализы)
+docs/
 
-# Test reports (generated)
-test_reports/
-
-# Streamlit cache
-.streamlit/
-
-# Local notes
-notes.txt
-
-# Local notebooks
-docs/Тестирование_психолог_версия_24_01_2025.ipynb
-
-# Example files (not for commit)
-docs/Психологический портрет КимСВ.docx
+# Тестовые папки с выходными данными (содержат сгенерированные файлы)
+tests/test_*/
 
 # Configuration examples (template files)
 !.env.example
