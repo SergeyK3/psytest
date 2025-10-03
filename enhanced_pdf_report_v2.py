@@ -13,6 +13,7 @@
 """
 
 from pathlib import Path
+import os
 from typing import Dict, List, Tuple, Optional
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -30,6 +31,16 @@ import numpy as np
 
 from src.psytest.charts import make_radar, make_bar_chart
 from scale_normalizer import ScaleNormalizer
+
+# Google Drive интеграция (опционально)
+try:
+    from google.oauth2 import service_account
+    from googleapiclient.discovery import build
+    from googleapiclient.http import MediaFileUpload
+    from googleapiclient.errors import HttpError
+    GOOGLE_DRIVE_AVAILABLE = True
+except ImportError:
+    GOOGLE_DRIVE_AVAILABLE = False
 
 # Константы для минималистичного дизайна
 class DesignConfig:
@@ -505,6 +516,170 @@ class EnhancedPDFReportV2:
         ))
         
         return styles
+    
+    def _init_google_drive(self) -> Optional[object]:
+        """Инициализация Google Drive API с OAuth"""
+        if not GOOGLE_DRIVE_AVAILABLE:
+            return None
+        
+        try:
+            from google.auth.transport.requests import Request
+            from google.oauth2.credentials import Credentials
+            from google_auth_oauthlib.flow import InstalledAppFlow
+            
+            SCOPES = ['https://www.googleapis.com/auth/drive.file']
+            
+            creds = None
+            token_file = 'token.json'
+            credentials_file = 'oauth_credentials.json'
+            
+            # Загружаем существующие токены
+            if os.path.exists(token_file):
+                creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+            
+            # Если нет валидных токенов, запускаем OAuth flow
+            if not creds or not creds.valid:
+                if creds and creds.expired and creds.refresh_token:
+                    creds.refresh(Request())
+                else:
+                    if not os.path.exists(credentials_file):
+                        print(f"🔑 Файл {credentials_file} не найден - Google Drive отключен")
+                        return None
+                        
+                    flow = InstalledAppFlow.from_client_secrets_file(credentials_file, SCOPES)
+                    creds = flow.run_local_server(port=0)
+                
+                # Сохраняем токены для будущего использования
+                with open(token_file, 'w') as token:
+                    token.write(creds.to_json())
+            
+            service = build('drive', 'v3', credentials=creds)
+            print("✅ Google Drive API инициализирован (OAuth)")
+            return service
+            
+        except Exception as e:
+            print(f"❌ Ошибка инициализации Google Drive: {e}")
+            return None
+    
+    def _upload_to_google_drive(self, file_path: Path, user_name: str = "User") -> Optional[str]:
+        """Загружает PDF отчет в Google Drive"""
+        service = self._init_google_drive()
+        if not service:
+            return None
+        
+        try:
+            # Создаем структуру папок
+            from datetime import datetime
+            
+            # Корневая папка
+            root_folder_name = "PsychTest Reports"
+            root_query = f"name='{root_folder_name}' and mimeType='application/vnd.google-apps.folder'"
+            root_results = service.files().list(q=root_query).execute()
+            
+            if root_results.get('files'):
+                root_folder_id = root_results['files'][0]['id']
+            else:
+                root_metadata = {
+                    'name': root_folder_name,
+                    'mimeType': 'application/vnd.google-apps.folder'
+                }
+                root_folder = service.files().create(body=root_metadata).execute()
+                root_folder_id = root_folder['id']
+            
+            # Папка года
+            year = str(datetime.now().year)
+            year_query = f"name='{year}' and mimeType='application/vnd.google-apps.folder' and '{root_folder_id}' in parents"
+            year_results = service.files().list(q=year_query).execute()
+            
+            if year_results.get('files'):
+                year_folder_id = year_results['files'][0]['id']
+            else:
+                year_metadata = {
+                    'name': year,
+                    'mimeType': 'application/vnd.google-apps.folder',
+                    'parents': [root_folder_id]
+                }
+                year_folder = service.files().create(body=year_metadata).execute()
+                year_folder_id = year_folder['id']
+            
+            # Папка месяца
+            month = datetime.now().strftime("%m-%B")
+            month_query = f"name='{month}' and mimeType='application/vnd.google-apps.folder' and '{year_folder_id}' in parents"
+            month_results = service.files().list(q=month_query).execute()
+            
+            if month_results.get('files'):
+                month_folder_id = month_results['files'][0]['id']
+            else:
+                month_metadata = {
+                    'name': month,
+                    'mimeType': 'application/vnd.google-apps.folder',
+                    'parents': [year_folder_id]
+                }
+                month_folder = service.files().create(body=month_metadata).execute()
+                month_folder_id = month_folder['id']
+            
+            # Загружаем файл
+            file_metadata = {
+                'name': file_path.name,
+                'parents': [month_folder_id]
+            }
+            
+            media = MediaFileUpload(str(file_path), mimetype='application/pdf')
+            file_obj = service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id,name,webViewLink'
+            ).execute()
+            
+            # Делаем файл публично доступным
+            try:
+                permission = {
+                    'type': 'anyone',
+                    'role': 'reader'
+                }
+                service.permissions().create(
+                    fileId=file_obj['id'],
+                    body=permission
+                ).execute()
+            except:
+                pass  # Игнорируем ошибки прав доступа
+            
+            link = file_obj.get('webViewLink')
+            print(f"✅ PDF загружен в Google Drive: {link}")
+            return link
+            
+        except Exception as e:
+            print(f"❌ Ошибка загрузки в Google Drive: {e}")
+            return None
+    
+    def generate_enhanced_report_with_gdrive(self, 
+                                           participant_name: str,
+                                           test_date: str,
+                                           paei_scores: Dict[str, float],
+                                           disc_scores: Dict[str, float], 
+                                           hexaco_scores: Dict[str, float],
+                                           soft_skills_scores: Dict[str, float],
+                                           ai_interpretations: Dict[str, str],
+                                           out_path: Path,
+                                           upload_to_gdrive: bool = True) -> Tuple[Path, Optional[str]]:
+        """
+        Генерирует PDF отчёт и опционально загружает в Google Drive
+        
+        Returns:
+            Tuple[Path, Optional[str]]: путь к файлу и ссылка на Google Drive (если загружен)
+        """
+        # Генерируем обычный отчет
+        pdf_path = self.generate_enhanced_report(
+            participant_name, test_date, paei_scores, disc_scores,
+            hexaco_scores, soft_skills_scores, ai_interpretations, out_path
+        )
+        
+        # Загружаем в Google Drive если нужно
+        gdrive_link = None
+        if upload_to_gdrive:
+            gdrive_link = self._upload_to_google_drive(pdf_path, participant_name)
+        
+        return pdf_path, gdrive_link
     
     def _format_scores(self, scores: Dict[str, float]) -> str:
         """Форматирует результаты в читаемую строку"""

@@ -668,8 +668,8 @@ async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             # Если данных недостаточно, используем средние значения
             session.soft_skills_scores = {skill: 5.0 for skill in soft_skills_names}
         
-        # Генерируем PDF отчет
-        pdf_path = await generate_user_report(session)
+        # Генерируем PDF отчет с Google Drive интеграцией
+        pdf_path, gdrive_link = await generate_user_report(session)
         
         # Отправляем PDF пользователю
         with open(pdf_path, 'rb') as pdf_file:
@@ -685,6 +685,16 @@ async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         
         # Удаляем временный файл
         os.unlink(pdf_path)
+        
+        # Отправляем ссылку на Google Drive если доступна
+        if gdrive_link:
+            await update.message.reply_text(
+                f"☁️ <b>Ваш отчет также доступен в облаке:</b>\n\n"
+                f"🔗 <a href='{gdrive_link}'>Открыть в Google Drive</a>\n\n"
+                f"📤 Вы можете легко поделиться этой ссылкой с коллегами или сохранить для будущего использования.",
+                parse_mode='HTML',
+                disable_web_page_preview=True
+            )
         
         await update.message.reply_text(
             "✅ <b>Готово!</b>\n\n"
@@ -777,8 +787,8 @@ async def generate_user_report(session: UserSession) -> str:
     logger.info(f"  {hexaco_method}")
     logger.info(f"  {soft_skills_method}")
     
-    # Генерируем отчет с нормализованными баллами
-    pdf_generator.generate_enhanced_report(
+    # Генерируем отчет с автоматической загрузкой в Google Drive
+    result = pdf_generator.generate_enhanced_report_with_gdrive(
         participant_name=session.name,
         test_date=datetime.now().strftime("%Y-%m-%d"),
         paei_scores=paei_normalized,
@@ -786,13 +796,22 @@ async def generate_user_report(session: UserSession) -> str:
         hexaco_scores=hexaco_normalized,
         soft_skills_scores=soft_skills_normalized,
         ai_interpretations=interpretations,
-        out_path=pdf_path
+        out_path=pdf_path,
+        upload_to_gdrive=True
     )
     
-    # Отчет уже сохранен в docs/, дополнительное архивирование не требуется
-    logger.info(f"📁 Отчет сохранен: {pdf_path.name}")
-    
-    # (Архивирование отключено, так как файл уже в правильном месте)
+    # Проверяем результат Google Drive загрузки
+    gdrive_link = None
+    if result and len(result) == 2:
+        local_path, gdrive_link = result
+        logger.info(f"📁 Отчет сохранен: {pdf_path.name}")
+        if gdrive_link:
+            logger.info(f"☁️ Google Drive: {gdrive_link}")
+        else:
+            logger.info("⚠️ Google Drive загрузка не удалась")
+    else:
+        logger.info(f"📁 Отчет сохранен: {pdf_path.name}")
+        logger.warning("⚠️ Проблема с Google Drive интеграцией")
     # try:
     #     user_info = {
     #         "telegram_id": session.user_id,
@@ -815,7 +834,7 @@ async def generate_user_report(session: UserSession) -> str:
     # except Exception as e:
     #     logger.warning(f"⚠️ Не удалось архивировать отчет: {e}")
     
-    return str(pdf_path)
+    return str(pdf_path), gdrive_link
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Отмена тестирования"""
