@@ -53,8 +53,99 @@ def setup_oauth_google_drive():
         print(f"❌ Ошибка инициализации OAuth: {e}")
         return None
 
-def upload_to_google_drive_oauth(file_path: str, folder_name: str = "PsychTest Reports") -> Optional[str]:
-    """Загружает файл в Google Drive используя OAuth"""
+def create_monthly_folder_structure(service, year: int, month: int, base_folder_name: str = "PsychTest Reports") -> Optional[str]:
+    """Создает структуру папок: PsychTest Reports / 2025 / 10-October
+    
+    Args:
+        service: Google Drive API service
+        year: Год (например, 2025)
+        month: Месяц (1-12)
+        base_folder_name: Базовая папка
+    
+    Returns:
+        folder_id месячной папки или None при ошибке
+    """
+    try:
+        # Названия месяцев на английском
+        month_names = {
+            1: "01-January", 2: "02-February", 3: "03-March", 4: "04-April",
+            5: "05-May", 6: "06-June", 7: "07-July", 8: "08-August", 
+            9: "09-September", 10: "10-October", 11: "11-November", 12: "12-December"
+        }
+        
+        # 1. Ищем или создаем базовую папку "PsychTest Reports"
+        query = f"name='{base_folder_name}' and mimeType='application/vnd.google-apps.folder'"
+        results = service.files().list(q=query, fields="files(id, name)").execute()
+        folders = results.get('files', [])
+        
+        if folders:
+            base_folder_id = folders[0]['id']
+            print(f"📁 Найдена базовая папка: {base_folder_name}")
+        else:
+            # Создаем базовую папку
+            folder_metadata = {
+                'name': base_folder_name,
+                'mimeType': 'application/vnd.google-apps.folder'
+            }
+            folder = service.files().create(body=folder_metadata).execute()
+            base_folder_id = folder.get('id')
+            print(f"📁 Создана базовая папка: {base_folder_name}")
+        
+        # 2. Ищем или создаем папку года внутри базовой папки
+        year_folder_name = str(year)
+        query = f"name='{year_folder_name}' and mimeType='application/vnd.google-apps.folder' and '{base_folder_id}' in parents"
+        results = service.files().list(q=query, fields="files(id, name)").execute()
+        folders = results.get('files', [])
+        
+        if folders:
+            year_folder_id = folders[0]['id']
+            print(f"📁 Найдена папка года: {year_folder_name}")
+        else:
+            # Создаем папку года
+            folder_metadata = {
+                'name': year_folder_name,
+                'mimeType': 'application/vnd.google-apps.folder',
+                'parents': [base_folder_id]
+            }
+            folder = service.files().create(body=folder_metadata).execute()
+            year_folder_id = folder.get('id')
+            print(f"📁 Создана папка года: {year_folder_name}")
+        
+        # 3. Ищем или создаем папку месяца внутри папки года
+        month_folder_name = month_names[month]
+        query = f"name='{month_folder_name}' and mimeType='application/vnd.google-apps.folder' and '{year_folder_id}' in parents"
+        results = service.files().list(q=query, fields="files(id, name)").execute()
+        folders = results.get('files', [])
+        
+        if folders:
+            month_folder_id = folders[0]['id']
+            print(f"📁 Найдена папка месяца: {month_folder_name}")
+        else:
+            # Создаем папку месяца
+            folder_metadata = {
+                'name': month_folder_name,
+                'mimeType': 'application/vnd.google-apps.folder',
+                'parents': [year_folder_id]
+            }
+            folder = service.files().create(body=folder_metadata).execute()
+            month_folder_id = folder.get('id')
+            print(f"📁 Создана папка месяца: {month_folder_name}")
+        
+        return month_folder_id
+        
+    except Exception as e:
+        print(f"❌ Ошибка создания структуры папок: {e}")
+        return None
+
+def upload_to_google_drive_oauth(file_path: str, folder_name: str = "PsychTest Reports", folder_id: str = None, use_monthly_structure: bool = True) -> Optional[str]:
+    """Загружает файл в Google Drive используя OAuth
+    
+    Args:
+        file_path: Путь к файлу для загрузки
+        folder_name: Название базовой папки (используется если folder_id не указан)
+        folder_id: Конкретный ID папки Google Drive
+        use_monthly_structure: Использовать ли месячную структуру папок (год/месяц)
+    """
     
     service = setup_oauth_google_drive()
     if not service:
@@ -63,25 +154,36 @@ def upload_to_google_drive_oauth(file_path: str, folder_name: str = "PsychTest R
     try:
         from googleapiclient.http import MediaFileUpload
         from googleapiclient.errors import HttpError
+        import datetime
         
-        # Ищем или создаем папку
-        folder_id = None
-        query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder'"
-        results = service.files().list(q=query, fields="files(id, name)").execute()
-        folders = results.get('files', [])
-        
-        if folders:
-            folder_id = folders[0]['id']
-            print(f"📁 Найдена папка: {folder_name}")
+        # Если указан конкретный ID папки, используем его
+        if folder_id:
+            print(f"📁 Используется указанная папка с ID: {folder_id}")
+        elif use_monthly_structure:
+            # Используем месячную структуру папок
+            now = datetime.datetime.now()
+            folder_id = create_monthly_folder_structure(service, now.year, now.month, folder_name)
+            if not folder_id:
+                print("❌ Не удалось создать месячную структуру папок")
+                return None
         else:
-            # Создаем папку
-            folder_metadata = {
-                'name': folder_name,
-                'mimeType': 'application/vnd.google-apps.folder'
-            }
-            folder = service.files().create(body=folder_metadata).execute()
-            folder_id = folder.get('id')
-            print(f"📁 Создана папка: {folder_name}")
+            # Ищем или создаем папку по имени (старая логика)
+            query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder'"
+            results = service.files().list(q=query, fields="files(id, name)").execute()
+            folders = results.get('files', [])
+            
+            if folders:
+                folder_id = folders[0]['id']
+                print(f"📁 Найдена папка: {folder_name}")
+            else:
+                # Создаем папку
+                folder_metadata = {
+                    'name': folder_name,
+                    'mimeType': 'application/vnd.google-apps.folder'
+                }
+                folder = service.files().create(body=folder_metadata).execute()
+                folder_id = folder.get('id')
+                print(f"📁 Создана папка: {folder_name}")
         
         # Загружаем файл
         file_name = os.path.basename(file_path)
