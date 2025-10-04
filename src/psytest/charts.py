@@ -279,3 +279,66 @@ def make_bar_chart(labels, values, out_path: Path, title: str = "",
                 edgecolor='none')
     plt.close(fig)
     return out_path
+
+def make_pie_chart(labels, values, out_path: Path, title: str = "") -> Path:
+    """
+    Создает круговую диаграмму для печати
+    
+    Args:
+        labels: Названия категорий
+        values: Значения для каждой категории (без нормализации)
+        out_path: Путь для сохранения файла
+        title: Заголовок диаграммы
+    """
+    # Подготовка данных
+    total = sum(values)
+    percentages = [(value / total) * 100 for value in values]
+    
+    # Цвета для DISC
+    colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4']
+    
+    # Создание диаграммы
+    fig, ax = plt.subplots(figsize=(10, 8))
+    
+    # Настройка matplotlib для качественной печати
+    plt.rcParams.update({
+        'font.size': 11,
+        'axes.titlesize': 14,
+        'axes.labelsize': 11,
+        'xtick.labelsize': 10,
+        'ytick.labelsize': 10,
+        'legend.fontsize': 10,
+        'figure.titlesize': 16
+    })
+    
+    # Создание круговой диаграммы
+    wedges, texts, autotexts = ax.pie(
+        values,
+        labels=[f'{label}\n{value} баллов\n({percentage:.1f}%)' 
+                for label, value, percentage in zip(labels, values, percentages)],
+        colors=colors[:len(labels)],
+        autopct='',
+        startangle=90,
+        textprops={'fontsize': 10, 'weight': 'bold', 'color': PRINT_COLORS['primary']},
+        wedgeprops={'linewidth': 1, 'edgecolor': PRINT_COLORS['primary']}
+    )
+    
+    # Заголовок
+    if title:
+        ax.set_title(title, fontsize=14, fontweight='bold', 
+                    color=PRINT_COLORS['primary'], pad=20)
+    
+    # Убираем оси
+    ax.axis('equal')
+    
+    # Настройка фона
+    fig.patch.set_facecolor(PRINT_COLORS['background'])
+    ax.set_facecolor(PRINT_COLORS['background'])
+    
+    # Сохранение
+    plt.tight_layout()
+    fig.savefig(out_path, format='png', bbox_inches='tight', 
+                pad_inches=0.25, facecolor=PRINT_COLORS['background'], 
+                edgecolor='none', dpi=300)
+    plt.close(fig)
+    return out_path

@@ -529,19 +529,29 @@ async def handle_hexaco_answer(update: Update, context: ContextTypes.DEFAULT_TYP
     session = user_sessions[user_id]
     answer_text = update.message.text
     
+    # Проверяем на выход
+    if answer_text == "❌ Выйти":
+        return await cancel(update, context)
+    
+    # Извлекаем числовой ответ (1-5)
     try:
-        score = int(answer_text)
-        if 1 <= score <= 5:
+        score = None
+        for i in range(1, 6):  # Проверяем цифры 1-5
+            if answer_text.startswith(str(i)):
+                score = i
+                break
+                
+        if score is not None:
             # Сохраняем ответ в список (позже будем делать среднее)
             session.hexaco_scores.append(score)
             
             session.current_question += 1
             return await ask_hexaco_question(update, context)
         else:
-            await update.message.reply_text("❗ Пожалуйста, выберите число от 1 до 5")
-            return HEXACO_TESTING
-    except ValueError:
-        await update.message.reply_text("❗ Пожалуйста, выберите число от 1 до 5")
+            raise ValueError("Неверный формат ответа")
+            
+    except (ValueError, IndexError):
+        await update.message.reply_text("❗ Пожалуйста, выберите один из предложенных вариантов (1-5)")
         return HEXACO_TESTING
 
 async def start_soft_skills_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -593,19 +603,29 @@ async def handle_soft_skills_answer(update: Update, context: ContextTypes.DEFAUL
     session = user_sessions[user_id]
     answer_text = update.message.text
     
+    # Проверяем на выход
+    if answer_text == "❌ Выйти":
+        return await cancel(update, context)
+    
+    # Извлекаем числовой ответ (1-5)
     try:
-        score = int(answer_text)
-        if 1 <= score <= 10:
+        score = None
+        for i in range(1, 6):  # Проверяем цифры 1-5
+            if answer_text.startswith(str(i)):
+                score = i
+                break
+                
+        if score is not None:
             # Сохраняем ответ в список
             session.soft_skills_scores.append(score)
             
             session.current_question += 1
             return await ask_soft_skills_question(update, context)
         else:
-            await update.message.reply_text("❗ Пожалуйста, выберите число от 1 до 10")
-            return SOFT_SKILLS_TESTING
-    except ValueError:
-        await update.message.reply_text("❗ Пожалуйста, выберите число от 1 до 10")
+            raise ValueError("Неверный формат ответа")
+            
+    except (ValueError, IndexError):
+        await update.message.reply_text("❗ Пожалуйста, выберите один из предложенных вариантов (1-5)")
         return SOFT_SKILLS_TESTING
 
 async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
