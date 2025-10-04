@@ -163,6 +163,51 @@ class AIInterpreter:
         
         return self._make_request(system_prompt, user_prompt)
 
+    def interpret_general_conclusion(self, all_scores: Dict, dialog_context: str = "") -> str:
+        """
+        Создание общего заключения на основе всех тестов
+        
+        Args:
+            all_scores: Словарь со всеми результатами тестов
+                {
+                    'paei': {'Производитель': 8, 'Администратор': 5, ...},
+                    'disc': {'D': 7, 'I': 5, 'S': 3, 'C': 4},
+                    'hexaco': {'Честность-Скромность': 4, ...},
+                    'soft_skills': {'Лидерство': 8, ...}
+                }
+            dialog_context: Контекст диалога (если есть)
+            
+        Returns:
+            Текст общего заключения
+        """
+        system_prompt = load_prompt("general_system_res.txt")
+        
+        # Формируем текст с результатами всех тестов
+        results_text = "Результаты всех тестов:\n\n"
+        
+        if 'paei' in all_scores:
+            paei_text = ", ".join([f"{k}: {v}" for k, v in all_scores['paei'].items()])
+            results_text += f"PAEI: {paei_text}\n\n"
+        
+        if 'soft_skills' in all_scores:
+            soft_text = ", ".join([f"{k}: {v}" for k, v in all_scores['soft_skills'].items()])
+            results_text += f"Soft Skills: {soft_text}\n\n"
+        
+        if 'hexaco' in all_scores:
+            hexaco_text = ", ".join([f"{k}: {v}" for k, v in all_scores['hexaco'].items()])
+            results_text += f"HEXACO: {hexaco_text}\n\n"
+        
+        if 'disc' in all_scores:
+            disc_text = ", ".join([f"{k}: {v}" for k, v in all_scores['disc'].items()])
+            results_text += f"DISC: {disc_text}\n\n"
+        
+        user_prompt = f"Создай общий психологический портрет на основе:\n\n{results_text}"
+        
+        if dialog_context:
+            user_prompt += f"\nКонтекст диалога: {dialog_context}"
+        
+        return self._make_request(system_prompt, user_prompt)
+
 
 def get_ai_interpreter(api_key: Optional[str] = None) -> Optional[AIInterpreter]:
     """

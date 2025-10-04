@@ -34,5 +34,10 @@ docs/
 # Тестовые папки с выходными данными (содержат сгенерированные файлы)
 tests/test_*/
 
+# Google OAuth/Drive credentials (содержат секретные данные)
+google_drive_credentials.json
+oauth_credentials.json
+token.json
+
 # Configuration examples (template files)
 !.env.example
