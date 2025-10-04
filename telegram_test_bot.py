@@ -9,6 +9,7 @@ import logging
 import asyncio
 import tempfile
 import os
+import re
 from pathlib import Path
 from datetime import datetime
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
@@ -52,129 +53,240 @@ class UserSession:
         self.current_question = 0
         self.started_at = datetime.now()
 
-# === ТЕСТОВЫЕ ДАННЫЕ ===
-PAEI_QUESTIONS = [
-    {
-        "question": "В работе вы больше склонны:",
-        "answers": {
-            "A": "Планировать и контролировать процессы",
-            "P": "Достигать конкретных результатов", 
-            "E": "Искать новые возможности",
-            "I": "Объединять людей для совместной работы"
-        }
-    },
-    {
-        "question": "При принятии решений вы:",
-        "answers": {
-            "A": "Анализируете все детали и риски",
-            "P": "Фокусируетесь на практическом результате",
-            "E": "Ищете инновационные подходы",
-            "I": "Учитываете мнения всех участников"
-        }
-    },
-    {
-        "question": "В команде вы чаще:",
-        "answers": {
-            "A": "Организуете рабочие процессы",
-            "P": "Выполняете ключевые задачи",
-            "E": "Предлагаете новые идеи", 
-            "I": "Поддерживаете атмосферу сотрудничества"
-        }
-    },
-    {
-        "question": "Как вы подходите к выполнению нового проекта?",
-        "answers": {
-            "P": "Сразу приступаю к работе, чтобы как можно быстрее увидеть результат",
-            "A": "В первую очередь разрабатываю структуру и последовательность действий",
-            "E": "Начинаю с поиска новых идей и возможностей",
-            "I": "Убеждаюсь, что все члены команды понимают свои роли"
-        }
-    },
-    {
-        "question": "Какой формат работы вам наиболее комфортен?",
-        "answers": {
-            "P": "Быстрое выполнение задач с четкими целями",
-            "A": "Работа в стабильной системе с заранее установленными правилами",
-            "E": "Проекты, требующие творчества и гибкости",
-            "I": "Работа в команде с акцентом на взаимодействие и коммуникацию"
-        }
-    }
-]
+# === ФУНКЦИИ ПАРСИНГА ВОПРОСОВ ===
 
-DISC_QUESTIONS = [
-    {
-        "question": "В сложной ситуации вы:",
-        "answers": {
-            "D": "Берете инициативу и действуете решительно",
-            "I": "Вдохновляете других на совместные действия",
-            "S": "Сохраняете спокойствие и поддерживаете команду",
-            "C": "Тщательно анализируете ситуацию"
+def parse_adizes_questions(filepath="data/prompts/adizes_user.txt"):
+    """Парсит вопросы PAEI/Adizes из файла"""
+    try:
+        questions = []
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Разбиваем на блоки вопросов (ищем паттерн с номером)
+        question_blocks = re.split(r'\n(?=\d+\.)', content)
+        
+        for block in question_blocks:
+            if not block.strip() or not re.match(r'^\d+\.', block.strip()):
+                continue
+                
+            lines = block.strip().split('\n')
+            question_text = lines[0].strip()
+            
+            # Извлекаем сам вопрос (убираем номер)
+            question_text = re.sub(r'^\d+\.\s*', '', question_text)
+            
+            answers = {}
+            for line in lines[1:]:
+                line = line.strip()
+                if re.match(r'^[PAEI]\.', line):
+                    code = line[0]  # P, A, E, или I
+                    answer_text = re.sub(r'^[PAEI]\.\s*', '', line)
+                    answers[code] = answer_text
+            
+            if question_text and len(answers) == 4:  # Должно быть 4 ответа
+                questions.append({
+                    "question": question_text,
+                    "answers": answers
+                })
+        
+        logger.info(f"📊 Загружено {len(questions)} PAEI вопросов из {filepath}")
+        return questions
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка при загрузке PAEI вопросов: {e}")
+        return []
+
+def parse_disc_questions(filepath="data/prompts/disc_user.txt"):
+    """Парсит вопросы DISC из файла"""
+    try:
+        questions = []
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Разбиваем на блоки по категориям (Доминирование, Влияние, Устойчивость, Подчинение правилам)
+        category_blocks = re.split(r'\n(?=\d+\.)', content)
+        
+        disc_categories = {
+            1: "D",  # Доминирование
+            2: "I",  # Влияние  
+            3: "S",  # Устойчивость (Steadiness)
+            4: "C"   # Подчинение правилам (Compliance)
         }
-    },
-    {
-        "question": "Ваш стиль общения:",
-        "answers": {
-            "D": "Прямой и нацеленный на результат",
-            "I": "Эмоциональный и вдохновляющий",
-            "S": "Терпеливый и поддерживающий",
-            "C": "Точный и основанный на фактах"
-        }
-    },
-    {
-        "question": "В работе вы цените:",
-        "answers": {
-            "D": "Быстрые результаты и достижения",
-            "I": "Общение и признание",
-            "S": "Стабильность и гармонию",
-            "C": "Качество и точность"
-        }
-    },
-    {
-        "question": "При решении сложных задач:",
-        "answers": {
-            "D": "Беру на себя полную ответственность за результат",
-            "I": "Мотивирую команду на достижение целей",
-            "S": "Предпочитаю стабильные и проверенные методы",
-            "C": "Тщательно проверяю все детали и стандарты"
-        }
-    },
-    {
-        "question": "В достижении целей:",
-        "answers": {
-            "D": "Стремлюсь к быстрым результатам, даже если это требует рисков",
-            "I": "Вдохновляю других на новые идеи и подходы",
-            "S": "Следую установленным процедурам",
-            "C": "Предпочитаю четко структурированные задачи"
-        }
-    },
-    {
-        "question": "В социальном взаимодействии:",
-        "answers": {
-            "D": "Предпочитаю прямое и эффективное общение",
-            "I": "Легко завожу новые знакомства и активно общаюсь",
-            "S": "Поддерживаю гармоничные отношения в команде",
-            "C": "Общаюсь основываясь на фактах и логике"
-        }
-    },
-    {
-        "question": "В рабочей среде:",
-        "answers": {
-            "D": "Предпочитаю динамичную среду с вызовами",
-            "I": "Ценю открытое общение и признание заслуг",
-            "S": "Предпочитаю стабильную среду без резких изменений",
-            "C": "Работаю лучше в структурированной среде с четкими правилами"
-        }
-    },
-    {
-        "question": "При планировании проектов:",
-        "answers": {
-            "D": "Фокусируюсь на конечном результате и скорости выполнения",
-            "I": "Уделяю внимание вовлечению команды и мотивации",
-            "S": "Обеспечиваю последовательность и избегаю резких изменений",
-            "C": "Детально прорабатываю все этапы и процессы"
-        }
+        
+        for block in category_blocks:
+            if not block.strip():
+                continue
+                
+            lines = block.strip().split('\n')
+            if not lines:
+                continue
+                
+            # Извлекаем название категории и номер
+            first_line = lines[0].strip()
+            category_match = re.match(r'^(\d+)\.\s*(.+?):', first_line)
+            if not category_match:
+                continue
+                
+            category_num = int(category_match.group(1))
+            category_name = category_match.group(2)
+            
+            if category_num not in disc_categories:
+                continue
+                
+            disc_code = disc_categories[category_num]
+            
+            # Извлекаем подвопросы
+            for line in lines[1:]:
+                line = line.strip()
+                if re.match(r'^\d+\.\d+', line):  # Формат 1.1, 1.2 и т.д.
+                    # Убираем номер и создаем вопрос
+                    question_text = re.sub(r'^\d+\.\d+\s*', '', line)
+                    
+                    if question_text:
+                        # Создаем вопрос в формате шкалы 1-5 вместо D/I/S/C
+                        questions.append({
+                            "question": question_text,
+                            "category": disc_code,
+                            "category_name": category_name
+                        })
+        
+        logger.info(f"📊 Загружено {len(questions)} DISC вопросов из {filepath}")
+        return questions
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка при загрузке DISC вопросов: {e}")
+        return []
+
+def parse_soft_skills_questions(filepath="data/prompts/soft_user.txt"):
+    """Парсинг вопросов Soft Skills из файла промптов"""
+    try:
+        with open(filepath, 'r', encoding='utf-8-sig') as file:  # utf-8-sig убирает BOM
+            content = file.read()
+    except FileNotFoundError:
+        logger.error(f"❌ Файл {filepath} не найден")
+        return []
+    
+    lines = content.strip().split('\n')
+    questions = []
+    current_question = None
+    collecting_answers = False
+    answers = []
+    
+    # Mapping навыков на номера вопросов
+    skills_mapping = {
+        1: "Коммуникация",
+        2: "Лидерство", 
+        3: "Лидерство",
+        4: "Аналитика",
+        5: "Планирование",
+        6: "Стрессоустойчивость",
+        7: "Стрессоустойчивость",
+        8: "Адаптивность",
+        9: "Командная работа",
+        10: "Творчество"
     }
-]
+    
+    for i, line in enumerate(lines):
+        original_line = line
+        line = line.strip()
+        if not line:
+            continue
+            
+        # Пропускаем инструкции в начале файла
+        if (line.startswith('Вот список') or line.startswith('1 =') or line.startswith('2 =') or 
+            line.startswith('3 =') or line.startswith('4 =') or line.startswith('5 =') or 
+            line.startswith('Задавай') or line.startswith('где:') or line.endswith('где:')):
+            continue
+            
+        # Ищем начало нового ОСНОВНОГО вопроса (без отступа в начале строки)
+        if (not original_line.startswith('  ') and  # НЕТ отступа в 2 пробела
+            line and line[0].isdigit() and '. ' in line):
+            
+            # Сохраняем предыдущий вопрос
+            if current_question and answers:
+                question_num = len(questions) + 1
+                skill = skills_mapping.get(question_num, "Общие навыки")
+                questions.append({
+                    'question': current_question,
+                    'scale': "1-5",
+                    'skill': skill,
+                    'answers': answers.copy()
+                })
+                answers = []
+            
+            # Начинаем новый вопрос
+            parts = line.split('. ', 1)
+            if len(parts) == 2:
+                current_question = parts[1]
+                collecting_answers = True
+        
+        # Собираем варианты ответов (начинаются с "  1.", "  2." и т.д.)
+        elif (collecting_answers and 
+              original_line.startswith('  ') and  # ЕСТЬ отступ в 2 пробела
+              len(original_line) > 2):
+            
+            clean_line = original_line[2:]  # Убираем два пробела
+            if clean_line and clean_line[0].isdigit() and '. ' in clean_line:
+                answer_parts = clean_line.split('. ', 1)
+                if len(answer_parts) == 2:
+                    try:
+                        answer_num = int(answer_parts[0])
+                        answer_text = answer_parts[1]
+                        answers.append({'value': answer_num, 'text': answer_text})
+                    except ValueError:
+                        continue
+    
+    # Добавляем последний вопрос
+    if current_question and answers:
+        question_num = len(questions) + 1
+        skill = skills_mapping.get(question_num, "Общие навыки")
+        questions.append({
+            'question': current_question,
+            'scale': "1-5",
+            'skill': skill,
+            'answers': answers.copy()
+        })
+    
+    if questions:
+        logger.info(f"📊 Загружено {len(questions)} Soft Skills вопросов из {filepath}")
+    else:
+        logger.error(f"❌ Не удалось загрузить Soft Skills вопросы из {filepath}")
+    
+    return questions
+
+# === ТЕСТОВЫЕ ДАННЫЕ ===
+# Загружаем PAEI вопросы из файла или используем резервные
+PAEI_QUESTIONS = parse_adizes_questions()
+if not PAEI_QUESTIONS:
+    # Резервные вопросы на случай ошибки загрузки
+    PAEI_QUESTIONS = [
+        {
+            "question": "В работе вы больше склонны:",
+            "answers": {
+                "A": "Планировать и контролировать процессы",
+                "P": "Достигать конкретных результатов", 
+                "E": "Искать новые возможности",
+                "I": "Объединять людей для совместной работы"
+            }
+        }
+    ]
+
+# Загружаем DISC вопросы из файла
+DISC_QUESTIONS = parse_disc_questions()
+if not DISC_QUESTIONS:
+    logger.error("❌ Не удалось загрузить DISC вопросы из файла!")
+    # Резервные DISC вопросы на случай ошибки загрузки
+    DISC_QUESTIONS = [
+        {
+            "question": "В сложной ситуации вы:",
+            "answers": {
+                "D": "Берете инициативу и действуете решительно",
+                "I": "Вдохновляете других на совместные действия",
+                "S": "Сохраняете спокойствие и поддерживаете команду",
+                "C": "Тщательно анализируете ситуацию"
+            }
+        }
+    ]
 
 HEXACO_QUESTIONS = [
     {
@@ -209,58 +321,23 @@ HEXACO_QUESTIONS = [
     }
 ]
 
-SOFT_SKILLS_QUESTIONS = [
-    {
-        "question": "Насколько эффективно вы можете объяснить сложные идеи другим?",
-        "scale": "1-10",
-        "skill": "Коммуникация"
-    },
-    {
-        "question": "Как часто вы берете на себя инициативу в групповых проектах?",
-        "scale": "1-10",
-        "skill": "Лидерство"
-    },
-    {
-        "question": "Насколько хорошо вы планируете свое время и ресурсы?",
-        "scale": "1-10",
-        "skill": "Планирование"
-    },
-    {
-        "question": "Как легко вы адаптируетесь к изменениям в рабочих процессах?",
-        "scale": "1-10",
-        "skill": "Адаптивность"
-    },
-    {
-        "question": "Насколько глубоко вы анализируете проблемы перед принятием решений?",
-        "scale": "1-10",
-        "skill": "Аналитика"
-    },
-    {
-        "question": "Как часто вы предлагаете нестандартные решения задач?",
-        "scale": "1-10",
-        "skill": "Творчество"
-    },
-    {
-        "question": "Насколько эффективно вы работаете в команде?",
-        "scale": "1-10",
-        "skill": "Командная работа"
-    },
-    {
-        "question": "Как хорошо вы справляетесь со стрессовыми ситуациями?",
-        "scale": "1-10",
-        "skill": "Стрессоустойчивость"
-    },
-    {
-        "question": "Насколько критично вы оцениваете качество своей работы?",
-        "scale": "1-10",
-        "skill": "Самоконтроль"
-    },
-    {
-        "question": "Как эффективно вы можете убедить других в своей точке зрения?",
-        "scale": "1-10",
-        "skill": "Влияние"
-    }
-]
+# Загружаем Soft Skills вопросы из файла
+SOFT_SKILLS_QUESTIONS = parse_soft_skills_questions()
+if not SOFT_SKILLS_QUESTIONS:
+    logger.error("❌ Не удалось загрузить Soft Skills вопросы из файла!")
+    # Резервные Soft Skills вопросы на случай ошибки загрузки
+    SOFT_SKILLS_QUESTIONS = [
+        {
+            "question": "Насколько эффективно вы можете объяснить сложные идеи другим?",
+            "scale": "1-5",
+            "skill": "Коммуникация"
+        },
+        {
+            "question": "Как часто вы берете на себя инициативу в групповых проектах?",
+            "scale": "1-5",
+            "skill": "Лидерство"
+        }
+    ]
 
 # === ОБРАБОТЧИКИ БОТА ===
 
@@ -362,7 +439,7 @@ async def ask_paei_question(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     session = user_sessions[user_id]
     
     if session.current_question >= len(PAEI_QUESTIONS):
-        return await start_disc_test(update, context)
+        return await start_soft_skills_test(update, context)
     
     question_data = PAEI_QUESTIONS[session.current_question]
     
@@ -423,14 +500,20 @@ async def ask_disc_question(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     logger.info(f"📋 ask_disc_question: current_question={session.current_question}, len={len(DISC_QUESTIONS)}")
     
     if session.current_question >= len(DISC_QUESTIONS):
-        logger.info(f"🎯 DISC завершен! Запускаем HEXACO тест")
-        return await start_hexaco_test(update, context)
+        logger.info(f"🎯 DISC завершен! Завершаем тестирование")
+        return await complete_testing(update, context)
     
     question_data = DISC_QUESTIONS[session.current_question]
     
-    keyboard = []
-    for key, answer in question_data["answers"].items():
-        keyboard.append([f"{key}. {answer}"])
+    # Создаем клавиатуру для шкалы 1-5
+    keyboard = [
+        ["1 - Совсем не согласен"],
+        ["2 - Не согласен"],
+        ["3 - Нейтрально"],
+        ["4 - Согласен"],
+        ["5 - Полностью согласен"],
+        ["❌ Выйти"]
+    ]
     
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     
@@ -438,7 +521,9 @@ async def ask_disc_question(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     
     await update.message.reply_text(
         f"🎭 <b>DISC - Вопрос {session.current_question + 1}/{len(DISC_QUESTIONS)}</b>\n\n"
-        f"{question_data['question']}",
+        f"📊 <b>Категория:</b> {question_data['category_name']} ({question_data['category']})\n\n"
+        f"<i>{question_data['question']}</i>\n\n"
+        f"Оцените по шкале от 1 до 5:",
         parse_mode='HTML',
         reply_markup=reply_markup
     )
@@ -446,22 +531,38 @@ async def ask_disc_question(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     return DISC_TESTING
 
 async def handle_disc_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Обрабатывает ответ DISC"""
+    """Обрабатывает ответ DISC (шкала 1-5)"""
     user_id = update.effective_user.id
     session = user_sessions[user_id]
     answer_text = update.message.text
+    
+    # Проверяем на команду выхода
+    if answer_text and ("❌" in answer_text or answer_text.lower() in ["/exit", "/cancel", "выйти", "отмена"]):
+        return await cancel(update, context)
     
     # Добавляем подробное логирование
     logger.info(f"📝 DISC ответ от {user_id}: '{answer_text}'")
     logger.info(f"📊 Текущий вопрос: {session.current_question + 1}/{len(DISC_QUESTIONS)}")
     
-    answer_code = answer_text[0] if answer_text else ""
-    logger.info(f"🔤 Код ответа: '{answer_code}'")
+    # Извлекаем число от 1 до 5 из ответа
+    score = None
+    if answer_text and len(answer_text) > 0:
+        if answer_text[0].isdigit():
+            score = int(answer_text[0])
     
-    if answer_code in ["D", "I", "S", "C"]:
-        session.disc_scores[answer_code] += 1
+    logger.info(f"� Балл: {score}")
+    
+    if score and 1 <= score <= 5:
+        # Получаем данные текущего вопроса
+        question_data = DISC_QUESTIONS[session.current_question]
+        category = question_data['category']  # D, I, S, C
+        
+        # Добавляем балл к соответствующей категории
+        session.disc_scores[category] += score
         session.current_question += 1
-        logger.info(f"✅ Ответ принят. Новый current_question: {session.current_question}")
+        
+        logger.info(f"✅ Ответ принят. Категория: {category}, Балл: {score}")
+        logger.info(f"✅ Новый current_question: {session.current_question}")
         logger.info(f"📈 Счет DISC: {session.disc_scores}")
         
         if session.current_question >= len(DISC_QUESTIONS):
@@ -469,8 +570,8 @@ async def handle_disc_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
         return await ask_disc_question(update, context)
     else:
-        logger.warning(f"❌ Неверный ответ DISC: '{answer_text}' -> '{answer_code}'")
-        await update.message.reply_text("❗ Пожалуйста, выберите один из предложенных вариантов")
+        logger.warning(f"❌ Неверный ответ DISC: '{answer_text}' -> балл: {score}")
+        await update.message.reply_text("❗ Пожалуйста, выберите оценку от 1 до 5")
         return DISC_TESTING
 
 async def start_hexaco_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -505,7 +606,7 @@ async def ask_hexaco_question(update: Update, context: ContextTypes.DEFAULT_TYPE
     session = user_sessions[user_id]
     
     if session.current_question >= len(HEXACO_QUESTIONS):
-        return await start_soft_skills_test(update, context)
+        return await start_disc_test(update, context)
     
     question_data = HEXACO_QUESTIONS[session.current_question]
     
@@ -578,18 +679,31 @@ async def ask_soft_skills_question(update: Update, context: ContextTypes.DEFAULT
     session = user_sessions[user_id]
     
     if session.current_question >= len(SOFT_SKILLS_QUESTIONS):
-        return await complete_testing(update, context)
+        return await start_hexaco_test(update, context)
     
     question_data = SOFT_SKILLS_QUESTIONS[session.current_question]
     
-    keyboard = [
-        ["1", "2", "3", "4", "5"],
-        ["6", "7", "8", "9", "10"]
-    ]
+    # Создаем клавиатуру с вариантами ответов из файла или базовую шкалу 1-5
+    keyboard = []
+    if 'answers' in question_data and question_data['answers']:
+        # Используем варианты ответов из файла
+        for answer in question_data['answers']:
+            keyboard.append([f"{answer['value']}. {answer['text']}"])
+    else:
+        # Используем базовую шкалу 1-5
+        keyboard = [
+            ["1", "2", "3", "4", "5"]
+        ]
+    
+    # Добавляем кнопку выхода
+    keyboard.append(["❌ Выйти"])
+    
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     
+    skill_info = f" ({question_data['skill']})" if 'skill' in question_data else ""
+    
     await update.message.reply_text(
-        f"💪 <b>Soft Skills - Вопрос {session.current_question + 1}/{len(SOFT_SKILLS_QUESTIONS)}</b>\n\n"
+        f"💪 <b>Soft Skills - Вопрос {session.current_question + 1}/{len(SOFT_SKILLS_QUESTIONS)}</b>{skill_info}\n\n"
         f"{question_data['question']}",
         parse_mode='HTML',
         reply_markup=reply_markup
@@ -604,27 +718,32 @@ async def handle_soft_skills_answer(update: Update, context: ContextTypes.DEFAUL
     answer_text = update.message.text
     
     # Проверяем на выход
-    if answer_text == "❌ Выйти":
+    if answer_text and ("❌" in answer_text or answer_text.lower() in ["/exit", "/cancel", "выйти", "отмена"]):
         return await cancel(update, context)
     
     # Извлекаем числовой ответ (1-5)
     try:
         score = None
-        for i in range(1, 6):  # Проверяем цифры 1-5
-            if answer_text.startswith(str(i)):
-                score = i
-                break
-                
-        if score is not None:
+        
+        # Сначала проверяем ответы в формате "1. Текст ответа"
+        if answer_text and answer_text[0].isdigit():
+            score = int(answer_text[0])
+        
+        # Проверяем диапазон 1-5
+        if score and 1 <= score <= 5:
             # Сохраняем ответ в список
             session.soft_skills_scores.append(score)
+            
+            logger.info(f"📝 Soft Skills ответ от {user_id}: балл {score}")
+            logger.info(f"📊 Текущий счет: {session.soft_skills_scores}")
             
             session.current_question += 1
             return await ask_soft_skills_question(update, context)
         else:
-            raise ValueError("Неверный формат ответа")
+            raise ValueError("Неверный диапазон ответа")
             
     except (ValueError, IndexError):
+        logger.warning(f"❌ Неверный ответ Soft Skills: '{answer_text}'")
         await update.message.reply_text("❗ Пожалуйста, выберите один из предложенных вариантов (1-5)")
         return SOFT_SKILLS_TESTING
 
