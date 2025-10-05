@@ -225,8 +225,10 @@ class EnhancedPDFReportV2:
                     print("\n===== AI PAEI INTERPRETATION (DEBUG) =====\n" + ai_result + "\n==========================================\n")
                     interpretations['paei'] = ai_result
                     
-                    # Soft Skills интерпретация с промптом soft_system_res.txt  
-                    interpretations['soft_skills'] = ai.interpret_soft_skills(soft_skills_scores)
+                    # Soft Skills интерпретация с промптом soft_system_res.txt
+                    soft_skills_result = ai.interpret_soft_skills(soft_skills_scores)
+                    print("\n===== AI SOFT SKILLS INTERPRETATION (DEBUG) =====\n" + soft_skills_result + "\n===============================================\n")
+                    interpretations['soft_skills'] = soft_skills_result
                     
                     # HEXACO интерпретация с промптом hexaco_system_res.txt
                     interpretations['hexaco'] = ai.interpret_hexaco(hexaco_scores)
