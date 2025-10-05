@@ -6,6 +6,7 @@
 
 from enhanced_pdf_report_v2 import EnhancedPDFReportV2
 from datetime import datetime
+from pathlib import Path
 
 def run_enhanced_report():
     """Запускает enhanced_pdf_report_v2 с правильными параметрами"""
@@ -69,8 +70,12 @@ def run_enhanced_report():
         
         print("📊 Создание отчета с enhanced_pdf_report_v2...")
         
+        # Путь для выходного файла
+        output_path = Path("temp_charts") / f"enhanced_report_{test_data['participant_name'].replace(' ', '_')}.pdf"
+        
         # Генерируем отчет
         pdf_path, gdrive_link = generator.generate_enhanced_report_with_gdrive(
+            out_path=output_path,
             **test_data
         )
         
