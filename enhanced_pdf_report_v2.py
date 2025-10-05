@@ -35,7 +35,7 @@ except ImportError:
     print("⚠️ AI интерпретатор недоступен - будут использованы статические интерпретации")
 import numpy as np
 
-from src.psytest.charts import make_radar, make_bar_chart, make_paei_combined_chart, make_disc_combined_chart
+from src.psytest.charts import make_radar, make_bar_chart, make_paei_combined_chart, make_disc_combined_chart, make_hexaco_radar
 
 # Константы для минималистичного дизайна
 class DesignConfig:
@@ -96,6 +96,12 @@ class EnhancedCharts:
                                   title: str, out_path: Path) -> Path:
         """Создаёт комбинированную диаграмму DISC (столбиковая + круговая)"""
         return make_disc_combined_chart(labels, values, out_path, title=title)
+        
+    @staticmethod
+    def create_hexaco_radar(labels: List[str], values: List[float], 
+                          title: str, out_path: Path) -> Path:
+        """Создаёт радарную диаграмму HEXACO с расшифровками аббревиатур"""
+        return make_hexaco_radar(labels, values, out_path, title=title)
 
 
 class EnhancedPDFReportV2:
@@ -631,12 +637,12 @@ class EnhancedPDFReportV2:
                                              "Soft Skills", soft_radar_path)
         charts['soft_skills'] = soft_radar_path
         
-        # HEXACO диаграмма (радарная)
+        # HEXACO диаграмма (радарная с расшифровками)
         hexaco_labels = list(hexaco_scores.keys())
         hexaco_values = list(hexaco_scores.values())
         hexaco_path = self.template_dir / "hexaco_radar.png"
-        EnhancedCharts.create_minimalist_radar(hexaco_labels, hexaco_values,
-                                             "HEXACO", hexaco_path)
+        EnhancedCharts.create_hexaco_radar(hexaco_labels, hexaco_values,
+                                         "HEXACO", hexaco_path)
         charts['hexaco'] = hexaco_path
         
         # DISC диаграмма (комбинированная - столбиковая + круговая)  

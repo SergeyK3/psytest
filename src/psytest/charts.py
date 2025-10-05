@@ -15,6 +15,50 @@ PRINT_COLORS = {
     'background': '#FFFFFF'     # Белый фон
 }
 
+# Профессиональная палитра для психологических тестов
+# Основана на принципах психологии цвета и читаемости при печати
+PSYCH_COLORS = {
+    # PAEI цвета - спокойные профессиональные тона
+    'PAEI': {
+        'P': '#2E4A66',      # Глубокий синий (Производитель - стабильность, надежность)
+        'A': '#5B9BD5',      # Средний синий (Администратор - организованность, порядок)  
+        'E': '#4F81BD',      # Яркий синий (Предприниматель - инновации, динамика)
+        'I': '#8FAADC'       # Светлый синий (Интегратор - гармония, объединение)
+    },
+    
+    # DISC цвета - спокойная палитра в стиле PAEI (оттенки синего)
+    'DISC': {
+        'D': '#2E4A66',      # Глубокий синий (Доминирование - сила, решительность)
+        'I': '#4F81BD',      # Средний синий (Влияние - общительность, энтузиазм)
+        'S': '#5B9BD5',      # Яркий синий (Постоянство - стабильность, поддержка)
+        'C': '#8FAADC'       # Светлый синий (Соответствие - точность, анализ)
+    },
+    
+    # HEXACO цвета - гармоничная градация
+    'HEXACO': {
+        'H': '#8064A2',      # Фиолетовый (Честность-Скромность)
+        'E': '#C55A5A',      # Кораллово-красный (Эмоциональность)
+        'X': '#4F81BD',      # Синий (Экстраверсия)
+        'A': '#70AD47',      # Зеленый (Доброжелательность)
+        'C': '#E5B845',      # Желтый (Добросовестность)
+        'O': '#9BBB59'       # Оливковый (Открытость опыту)
+    },
+    
+    # Soft Skills цвета - мягкие тона
+    'SOFT_SKILLS': [
+        '#4F81BD',  # Синий
+        '#70AD47',  # Зеленый
+        '#E5B845',  # Желтый
+        '#C55A5A',  # Красный
+        '#8064A2',  # Фиолетовый
+        '#5B9BD5',  # Голубой
+        '#9BBB59',  # Оливковый
+        '#2E4A66',  # Темно-синий
+        '#8FAADC',  # Светло-синий
+        '#B85450'   # Темно-красный
+    ]
+}
+
 def normalize_chart_values(values: List[float], method: str = "adaptive") -> Tuple[List[float], float, str]:
     """
     Нормализует значения для сбалансированных диаграмм
@@ -368,13 +412,8 @@ def make_paei_combined_chart(labels, values, out_path: Path, title: str = "") ->
         out_path: Путь для сохранения файла
         title: Заголовок диаграммы
     """
-    # Цветовая схема как на изображении
-    colors = {
-        'Производитель': '#2F4F4F',      # Темно-серый (производитель)
-        'Администратор': '#87CEEB',      # Светло-голубой (администратор)  
-        'Предприниматель': '#4682B4',     # Стальной синий (предприниматель)
-        'Интегратор': '#B0C4DE'          # Светло-стальной синий (интегратор)
-    }
+    # Сбалансированная цветовая схема PAEI
+    colors = PSYCH_COLORS['PAEI']
     
     # Подготовка данных
     total = sum(values)
@@ -389,7 +428,7 @@ def make_paei_combined_chart(labels, values, out_path: Path, title: str = "") ->
     }
     
     russian_labels = [label_mapping.get(label, label) for label in labels]
-    chart_colors = [colors.get(rus_label, '#4682B4') for rus_label in russian_labels]
+    chart_colors = [colors.get(label, '#4F81BD') for label in labels]
     
     # Настройка matplotlib для качественной печати на полную ширину
     plt.rcParams.update({
@@ -478,13 +517,8 @@ def make_disc_combined_chart(labels, values, out_path: Path, title: str = "") ->
         out_path: Путь для сохранения файла
         title: Заголовок диаграммы
     """
-    # Цветовая схема для DISC
-    colors = {
-        'D': '#E74C3C',      # Красный (доминирование)
-        'I': '#F39C12',      # Оранжевый (влияние)  
-        'S': '#27AE60',      # Зеленый (постоянство)
-        'C': '#3498DB'       # Синий (соответствие)
-    }
+    # Сбалансированная цветовая схема DISC
+    colors = PSYCH_COLORS['DISC']
     
     # Подготовка данных
     total = sum(values)
@@ -575,5 +609,102 @@ def make_disc_combined_chart(labels, values, out_path: Path, title: str = "") ->
     fig.savefig(out_path, format='png', bbox_inches='tight', 
                 pad_inches=0.3, facecolor='white', 
                 edgecolor='none', dpi=150)
+    plt.close(fig)
+    return out_path
+
+def make_hexaco_radar(labels, values, out_path: Path, title: str = "", max_value: int = 100, 
+                     normalize: bool = True, normalize_method: str = "adaptive"):
+    """
+    Создает радарную диаграмму HEXACO с расшифровками аббревиатур
+    
+    Args:
+        labels: Аббревиатуры HEXACO (H, E, X, A, C, O)
+        values: Значения для каждой оси
+        out_path: Путь для сохранения файла
+        title: Заголовок диаграммы
+        max_value: Максимальное значение шкалы (игнорируется при normalize=True)
+        normalize: Применять ли нормализацию для баланса
+        normalize_method: Метод нормализации
+    """
+    # Маппинг аббревиатур на полные названия (как на скриншоте)
+    hexaco_mapping = {
+        'H': 'H - Честность',
+        'E': 'E - Эмоциональность', 
+        'X': 'X - Экстраверсия',
+        'A': 'A - Доброжелательность',
+        'C': 'C - Добросовестность',
+        'O': 'O - Открытость'
+    }
+    
+    # Создаем расширенные лейблы
+    extended_labels = [hexaco_mapping.get(label, label) for label in labels]
+    
+    # Нормализуем значения если требуется
+    if normalize:
+        norm_values, max_norm, method_used = normalize_chart_values(values, normalize_method)
+        actual_max = max_norm * 1.1
+        display_values = norm_values
+        # Добавляем информацию о нормализации в заголовок
+        if method_used not in ["без_нормализации", "исходные"] and title:
+            title = f"{title} (норм: {method_used})"
+    else:
+        display_values = values
+        actual_max = max_value
+        method_used = "отключена"
+    # Настройка matplotlib для качественной печати
+    plt.rcParams.update({
+        'font.size': 10,
+        'font.family': 'sans-serif',
+        'axes.linewidth': 1.0,
+        'grid.linewidth': 0.6,
+        'lines.linewidth': 2.0,
+        'figure.dpi': 300,
+        'savefig.dpi': 300,
+        'savefig.bbox': 'tight',
+        'savefig.pad_inches': 0.15
+    })
+    N = len(extended_labels)
+    angles = [n / float(N) * 2 * pi for n in range(N)]
+    angles += angles[:1]
+    vals = list(display_values) + display_values[:1]
+    # Создание фигуры с увеличенным размером для длинных лейблов
+    fig = plt.figure(figsize=(7, 7), facecolor=PRINT_COLORS['background'])
+    ax = plt.subplot(111, polar=True)
+    # Настройка полярных осей
+    ax.set_theta_offset(pi / 2)
+    ax.set_theta_direction(-1)
+    # Установка меток осей с расширенными названиями
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(extended_labels, fontsize=9, color=PRINT_COLORS['primary'])
+    # Улучшенная радиальная сетка
+    if actual_max <= 4:
+        tick_step = 1
+    elif actual_max <= 8:
+        tick_step = 2
+    else:
+        tick_step = max(1, int(actual_max / 4))
+    ax.set_ylim(0, actual_max)
+    ticks = np.arange(0, actual_max, tick_step)
+    ax.set_yticks(ticks)
+    ax.set_yticklabels([f'{t:.1f}' for t in ticks], 
+                      fontsize=8, color=PRINT_COLORS['secondary'])
+    # Улучшенная стилизация сетки
+    ax.grid(True, color=PRINT_COLORS['light'], linewidth=0.6, alpha=0.8)
+    ax.set_facecolor(PRINT_COLORS['background'])
+    # Рисование диаграммы с цветом HEXACO
+    hexaco_color = PSYCH_COLORS['HEXACO'].get('H', PRINT_COLORS['accent'])  # Используем цвет H как основной
+    line = ax.plot(angles, vals, color=hexaco_color, linewidth=2.5, 
+                  marker='o', markersize=6, markerfacecolor=hexaco_color, 
+                  markeredgecolor=PRINT_COLORS['background'], markeredgewidth=2)
+    # Заливка области
+    ax.fill(angles, vals, color=hexaco_color, alpha=0.15)
+    # Заголовок
+    if title:
+        plt.title(title, pad=25, fontsize=11, fontweight='bold', 
+                 color=PRINT_COLORS['primary'])
+    # Сохранение
+    fig.savefig(out_path, format='png', bbox_inches='tight', 
+                pad_inches=0.2, facecolor=PRINT_COLORS['background'], 
+                edgecolor='none')
     plt.close(fig)
     return out_path
