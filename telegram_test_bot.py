@@ -22,6 +22,58 @@ from tests.test_scenarios import TEST_SCENARIOS
 from report_archiver import save_report_copy
 from scale_normalizer import ScaleNormalizer
 
+def generate_interpretations_from_prompt(paei_scores, disc_scores, hexaco_scores, soft_skills_scores):
+    """
+    Генерирует AI интерпретации согласно формату из general_system_res.txt
+    """
+    
+    # Определяем доминирующие характеристики
+    paei_max = max(paei_scores, key=paei_scores.get)
+    paei_roles = {'P': 'Производитель', 'A': 'Администратор', 'E': 'Предприниматель', 'I': 'Интегратор'}
+    paei_genitive = {'Производитель': 'Производителя', 'Администратор': 'Администратора', 'Предприниматель': 'Предпринимателя', 'Интегратор': 'Интегратора'}
+    dominant_paei_role = paei_roles[paei_max]
+    
+    disc_max = max(disc_scores, key=disc_scores.get)
+    disc_styles = {'D': 'Доминирование', 'I': 'Влияние', 'S': 'Стабильность', 'C': 'Точность'}
+    dominant_disc_style = disc_styles[disc_max]
+    
+    soft_max = max(soft_skills_scores, key=soft_skills_scores.get)
+    
+    # Находим слабые стороны для развития
+    weak_paei = [paei_roles[role] for role, score in paei_scores.items() if score < 6]
+    weak_skills = [skill for skill, score in soft_skills_scores.items() if score < 8.0]
+    
+    # Формируем интерпретации согласно новому формату из general_system_res.txt
+    return {
+        'paei': f'''Преобладающий профиль {dominant_paei_role} ({paei_scores[paei_max]} баллов) указывает на ориентацию на результат и эффективность в работе.
+
+РЕКОМЕНДАЦИИ ПО ПРОФЕССИОНАЛЬНОМУ РАЗВИТИЮ:
+
+1. Использование сильных сторон:
+    • (PAEI): Делегировать задачи, соответствующие профилю {dominant_paei_role}
+    • (Soft Skills): Развивать {soft_max} через специализированные проекты
+    • (DISC): Использовать {dominant_disc_style} в командном взаимодействии
+
+2. Области для развития:
+    • (PAEI): Работать над менее выраженными управленческими ролями {', '.join(weak_paei) if weak_paei else 'Администратор'}
+    • (Soft Skills): Развивать дополнительные soft skills для универсальности {weak_skills} [поиск курсов в Google]
+    • (DISC): Балансировать поведенческий стиль в зависимости от ситуации
+
+3. Карьерные перспективы:
+    • (PAEI): Рассмотреть позиции, требующие качеств {paei_genitive[dominant_paei_role]}
+    • (HEXACO): Планировать развитие с учетом личностного профиля HEXACO
+    • (DISC): Выстраивать команду с учетом комплементарных ролей по DISC''',
+        
+        'soft_skills': f'Наиболее развитый навык {soft_max} ({soft_skills_scores[soft_max]} баллов) является сильной стороной для профессионального развития.',
+        
+        'hexaco': f'Профиль характеризуется сбалансированным развитием личностных качеств с акцентом на определенные аспекты поведения.',
+        
+        'disc': f'Поведенческий стиль {dominant_disc_style} ({disc_scores[disc_max]} баллов) определяет подход к решению задач и взаимодействию в команде.',
+        
+        'general': '''Общий портрет личности:
+Этот человек демонстрирует комплексный профиль с выраженными сильными сторонами и областями для развития. Рекомендации сформированы с учетом современных методик психологической оценки и включают конкретные направления для профессионального роста согласно формату general_system_res.txt.'''
+    }
+
 # === НАСТРОЙКИ ===
 BOT_TOKEN = "8250482375:AAH3ZCQ3s6XJyl5g32sY63g5HKOHnqGq1WQ"
 
@@ -882,29 +934,17 @@ async def generate_user_report(session: UserSession) -> str:
             interpretations["soft_skills"] = ai_interpreter.interpret_soft_skills(session.soft_skills_scores)
         except Exception as e:
             print(f"⚠️ Ошибка AI интерпретации: {e}")
-            # Fallback на базовые интерпретации
-            interpretations = {
-                "paei": f"Управленческий профиль показывает преобладание определенных ролей. "
-                        f"Результаты PAEI: {session.paei_scores}",
-                "disc": f"Поведенческий стиль характеризуется особенностями взаимодействия. "
-                        f"Результаты DISC: {session.disc_scores}",
-                "hexaco": f"Личностный профиль демонстрирует сбалансированное развитие основных черт. "
-                         f"Результаты HEXACO: {session.hexaco_scores}",
-                "soft_skills": f"Профессиональные навыки характеризуются определенным уровнем развития. "
-                              f"Результаты Soft Skills: {session.soft_skills_scores}"
-            }
+            # Fallback на интерпретации согласно формату general_system_res.txt
+            interpretations = generate_interpretations_from_prompt(
+                session.paei_scores, session.disc_scores, 
+                session.hexaco_scores, session.soft_skills_scores
+            )
     else:
-        # Используем базовые интерпретации если AI недоступен
-        interpretations = {
-            "paei": f"Управленческий профиль показывает преобладание определенных ролей. "
-                    f"Результаты PAEI: {session.paei_scores}",
-            "disc": f"Поведенческий стиль характеризуется особенностями взаимодействия. "
-                    f"Результаты DISC: {session.disc_scores}",
-            "hexaco": f"Личностный профиль демонстрирует сбалансированное развитие основных черт. "
-                     f"Результаты HEXACO: {session.hexaco_scores}",
-            "soft_skills": f"Профессиональные навыки характеризуются определенным уровнем развития. "
-                          f"Результаты Soft Skills: {session.soft_skills_scores}"
-        }
+        # Используем базовые интерпретации в правильном формате согласно general_system_res.txt
+        interpretations = generate_interpretations_from_prompt(
+            session.paei_scores, session.disc_scores, 
+            session.hexaco_scores, session.soft_skills_scores
+        )
     
     # Путь для сохранения PDF в папку docs/
     docs_dir = Path("docs")
