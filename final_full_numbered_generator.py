@@ -6,7 +6,11 @@
 Объединяет:
 1. Полный контент из enhanced_pdf_report_v2.py (12-14 страниц, детальные описания)
 2. Правильную нумерацию из working_pdf_generator.py (WorkingNumberedCanvas)
-3. Исправление кодировки (регистрация Arial для кириллицы)
+3.                                    hexaco_scores: Dict[str, float] = None,
+                                   soft_skills_scores: Dict[str, float] = None,
+                                   ai_interpretations: Dict[str, str] = None,
+                                   filename: str = "final_full_numbered_report.pdf",
+                                   upload_to_gdrive: bool = True) -> Tuple[str, Optional[str]]:авление кодировки (регистрация Arial для кириллицы)
 
 Создан: 05.10.2025
 Статус: ✅ ОБЪЕДИНЯЕТ ВСЕ РЕШЕНИЯ
@@ -27,6 +31,15 @@ from reportlab.pdfbase.ttfonts import TTFont
 from datetime import datetime
 import tempfile
 import shutil
+
+# Google Drive интеграция
+try:
+    from oauth_google_drive import upload_to_google_drive_oauth
+    GOOGLE_DRIVE_AVAILABLE = True
+    print("✅ Google Drive интеграция доступна")
+except ImportError:
+    GOOGLE_DRIVE_AVAILABLE = False
+    print("⚠️ Google Drive интеграция недоступна")
 
 # Рабочий Canvas с полной нумерацией из working_pdf_generator.py
 class FinalNumberedCanvas(canvas.Canvas):
@@ -49,7 +62,7 @@ class FinalNumberedCanvas(canvas.Canvas):
         canvas.Canvas.save(self)
 
     def draw_page_number(self, page_num, total_pages):
-        """ПРОВЕРЕННАЯ функция нумерации с поддержкой кириллицы"""
+        """НУМЕРАЦИЯ В КОЛОНТИТУЛЕ: правый верхний угол в формате X из N"""
         # Пытаемся использовать Arial для кириллицы
         try:
             arial_path = "C:/Windows/Fonts/arial.ttf"
@@ -57,16 +70,17 @@ class FinalNumberedCanvas(canvas.Canvas):
                 # Регистрируем Arial для кириллицы
                 pdfmetrics.registerFont(TTFont('Arial-Final', arial_path))
                 self.setFont("Arial-Final", 10)
-                text = f"Стр. {page_num} из {total_pages}"
+                text = f"{page_num} из {total_pages}"  # Убираем "Стр." для колонтитула
             else:
                 raise Exception("Arial not found")
         except:
             # Fallback на Times-Roman
             self.setFont("Times-Roman", 10)
-            text = f"Стр. {page_num} из {total_pages}"
+            text = f"{page_num} из {total_pages}"  # Убираем "Стр." для колонтитула
         
-        # Позиция в верхнем правом углу
-        self.drawRightString(A4[0] - 20*mm, A4[1] - 15*mm, text)
+        # Позиция в колонтитуле - правый верхний угол
+        # A4[1] - 10*mm = позиция в самом верху страницы (колонтитул)
+        self.drawRightString(A4[0] - 20*mm, A4[1] - 10*mm, text)
 
 # Конфигурация дизайна
 class DesignConfig:
@@ -254,6 +268,34 @@ class FinalFullVolumeGenerator:
         
         return "Результаты тестирования предоставляют основу для профессионального развития."
 
+    def upload_to_google_drive(self, file_path: str, participant_name: str = None) -> Optional[str]:
+        """Загружает PDF отчет в Google Drive в месячную структуру папок"""
+        if not GOOGLE_DRIVE_AVAILABLE:
+            print("⚠️ Google Drive интеграция недоступна")
+            return None
+        
+        try:
+            print("📤 Загрузка PDF отчета в Google Drive...")
+            
+            # Загружаем с месячной структурой папок: PsychTest Reports/2025/10-October
+            web_link = upload_to_google_drive_oauth(
+                file_path=file_path,
+                folder_name="PsychTest Reports",
+                use_monthly_structure=True
+            )
+            
+            if web_link:
+                print(f"🎉 PDF успешно загружен в Google Drive!")
+                print(f"🔗 Ссылка для просмотра: {web_link}")
+                return web_link
+            else:
+                print("❌ Не удалось загрузить PDF в Google Drive")
+                return None
+                
+        except Exception as e:
+            print(f"❌ Ошибка загрузки в Google Drive: {e}")
+            return None
+
     def generate_full_volume_report(self, 
                                    participant_name: str = "Тестовый Пользователь",
                                    test_date: str = None,
@@ -262,8 +304,13 @@ class FinalFullVolumeGenerator:
                                    hexaco_scores: Dict[str, float] = None,
                                    soft_skills_scores: Dict[str, float] = None,
                                    ai_interpretations: Dict[str, str] = None,
-                                   filename: str = "final_full_numbered_report.pdf") -> str:
-        """Генерирует ПОЛНЫЙ PDF отчёт с правильной нумерацией и кириллицей"""
+                                   filename: str = "final_header_numbered_report.pdf",
+                                   upload_to_gdrive: bool = True) -> Tuple[str, Optional[str]]:
+        """Генерирует ПОЛНЫЙ PDF отчёт с правильной нумерацией, кириллицей и загрузкой в Google Drive
+        
+        Returns:
+            Tuple[str, Optional[str]]: (путь к файлу, ссылка на Google Drive или None)
+        """
         
         if test_date is None:
             test_date = datetime.now().strftime("%Y-%m-%d")
@@ -296,7 +343,7 @@ class FinalFullVolumeGenerator:
             pagesize=A4,
             leftMargin=DesignConfig.MARGIN*mm,
             rightMargin=DesignConfig.MARGIN*mm,
-            topMargin=DesignConfig.MARGIN*mm + 15,  # Место для номера страницы
+            topMargin=DesignConfig.MARGIN*mm + 20,  # Увеличено место для колонтитула
             bottomMargin=DesignConfig.MARGIN*mm,
             canvasmaker=FinalNumberedCanvas  # ИСПОЛЬЗУЕМ РАБОЧИЙ CANVAS!
         )
@@ -655,12 +702,17 @@ class FinalFullVolumeGenerator:
         print("🔄 Генерация полного PDF отчета с нумерацией...")
         doc.build(story)
         
-        return filename
+        # Загружаем в Google Drive (если включено)
+        google_drive_link = None
+        if upload_to_gdrive:
+            google_drive_link = self.upload_to_google_drive(filename, participant_name)
+        
+        return filename, google_drive_link
 
 if __name__ == "__main__":
     try:
         generator = FinalFullVolumeGenerator()
-        result_file = generator.generate_full_volume_report()
+        result_file, google_drive_link = generator.generate_full_volume_report()
         
         print(f"✅ Создан ФИНАЛЬНЫЙ PDF: {result_file}")
         
@@ -671,12 +723,70 @@ if __name__ == "__main__":
         
         if size > 50000:  # Больше 50KB
             print("✅ Размер файла соответствует полному объему")
-            print("✅ Нумерация: 'Стр. X из N' в верхнем правом углу")
+            print("✅ Нумерация: 'Стр. X из N' в колонтитуле")
             print("✅ Кодировка: Arial с поддержкой кириллицы")
         else:
             print("⚠️ Размер файла меньше ожидаемого")
+        
+        # Показываем результат Google Drive
+        if google_drive_link:
+            print(f"✅ Google Drive: {google_drive_link}")
+        else:
+            print("⚠️ Google Drive: загрузка не выполнена")
             
     except Exception as e:
         print(f"❌ Ошибка: {e}")
         import traceback
         traceback.print_exc()
+
+def create_psychological_report(participant_name: str, 
+                              paei_scores: Dict[str, float] = None,
+                              disc_scores: Dict[str, float] = None,
+                              hexaco_scores: Dict[str, float] = None,
+                              soft_skills_scores: Dict[str, float] = None,
+                              upload_to_google_drive: bool = True) -> Tuple[str, Optional[str]]:
+    """
+    Удобная функция для создания психологического отчета с автоматической загрузкой в Google Drive
+    
+    Args:
+        participant_name: Имя участника тестирования
+        paei_scores: Результаты PAEI теста (если None, используются тестовые данные)
+        disc_scores: Результаты DISC теста (если None, используются тестовые данные)
+        hexaco_scores: Результаты HEXACO теста (если None, используются тестовые данные)
+        soft_skills_scores: Результаты Soft Skills теста (если None, используются тестовые данные)
+        upload_to_google_drive: Загружать ли в Google Drive (по умолчанию True)
+    
+    Returns:
+        Tuple[str, Optional[str]]: (путь к локальному файлу, ссылка на Google Drive или None)
+        
+    Example:
+        # Создать отчет с тестовыми данными
+        file_path, gdrive_link = create_psychological_report("Иван Петров")
+        
+        # Создать отчет с реальными результатами
+        file_path, gdrive_link = create_psychological_report(
+            "Мария Сидорова",
+            paei_scores={"P": 9, "A": 7, "E": 8, "I": 6},
+            disc_scores={"D": 8, "I": 9, "S": 6, "C": 5}
+        )
+    """
+    
+    # Создаем уникальное имя файла на основе имени участника и времени
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_name = "".join(c for c in participant_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
+    safe_name = safe_name.replace(' ', '_')
+    filename = f"report_{safe_name}_{timestamp}.pdf"
+    
+    # Создаем генератор
+    generator = FinalFullVolumeGenerator()
+    
+    # Генерируем отчет
+    return generator.generate_full_volume_report(
+        participant_name=participant_name,
+        paei_scores=paei_scores,
+        disc_scores=disc_scores,
+        hexaco_scores=hexaco_scores,
+        soft_skills_scores=soft_skills_scores,
+        filename=filename,
+        upload_to_gdrive=upload_to_google_drive
+    )
