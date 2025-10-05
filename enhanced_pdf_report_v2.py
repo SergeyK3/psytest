@@ -233,23 +233,26 @@ class EnhancedPDFReportV2:
         
         # Профессиональные рекомендации
         story.append(Paragraph("<b>Рекомендации по профессиональному развитию:</b>", styles['SubTitle']))
-        recommendations = f"""
-        <b>1. Использование сильных сторон:</b><br/>
-        • Делегировать задачи, соответствующие профилю {paei_names.get(max_paei, max_paei)}<br/>
-        • Развивать {max_soft.lower()} через специализированные проекты<br/>
-        • Использовать {disc_names.get(max_disc, max_disc).lower()} в командном взаимодействии<br/><br/>
         
-        <b>2. Области для развития:</b><br/>
-        • Работать над менее выраженными управленческими ролями<br/>
-        • Развивать дополнительные soft skills для универсальности<br/>
-        • Балансировать поведенческий стиль в зависимости от ситуации<br/><br/>
+        # 1. Использование сильных сторон
+        story.append(Paragraph("<b>1. Использование сильных сторон:</b>", styles['Body']))
+        story.append(Paragraph(f"• (PAEI): Делегировать задачи, соответствующие профилю {paei_names.get(max_paei, max_paei)}", styles['ListWithIndent']))
+        story.append(Paragraph(f"• (Soft Skills): Развивать {max_soft.lower()} через специализированные проекты", styles['ListWithIndent']))
+        story.append(Paragraph(f"• (DISC): Использовать {disc_names.get(max_disc, max_disc).lower()} в командном взаимодействии", styles['ListWithIndent']))
+        story.append(Spacer(1, 2*mm))
         
-        <b>3. Карьерные перспективы:</b><br/>
-        • Рассмотреть позиции, требующие качеств {paei_names.get(max_paei, max_paei).lower()}а<br/>
-        • Планировать развитие с учетом личностного профиля HEXACO<br/>
-        • Выстраивать команду с учетом комплементарных ролей по DISC
-        """
-        story.append(Paragraph(recommendations, styles['Body']))
+        # 2. Области для развития  
+        story.append(Paragraph("<b>2. Области для развития:</b>", styles['Body']))
+        story.append(Paragraph("• (PAEI): Работать над менее выраженными управленческими ролями", styles['ListWithIndent']))
+        story.append(Paragraph("• (Soft Skills): Развивать дополнительные soft skills для универсальности [поиск курсов в Google]", styles['ListWithIndent']))
+        story.append(Paragraph("• (DISC): Балансировать поведенческий стиль в зависимости от ситуации", styles['ListWithIndent']))
+        story.append(Spacer(1, 2*mm))
+        
+        # 3. Карьерные перспективы
+        story.append(Paragraph("<b>3. Карьерные перспективы:</b>", styles['Body']))
+        story.append(Paragraph(f"• (PAEI): Рассмотреть позиции, требующие качеств {paei_names.get(max_paei, max_paei)}", styles['ListWithIndent']))
+        story.append(Paragraph("• (HEXACO): Планировать развитие с учетом личностного профиля HEXACO", styles['ListWithIndent']))
+        story.append(Paragraph("• (DISC): Выстраивать команду с учетом комплементарных ролей по DISC", styles['ListWithIndent']))
         story.append(Spacer(1, 6*mm))  # уменьшен отступ с 10мм до 6мм
         
         # Переход к детальным разделам
@@ -528,6 +531,18 @@ class EnhancedPDFReportV2:
             alignment=1,  # CENTER
             spaceAfter=2,
             spaceBefore=2,
+        ))
+        
+        # Стиль для списков с отступом (как на скриншоте)
+        styles.add(ParagraphStyle(
+            name='ListWithIndent',
+            parent=styles['Normal'],
+            fontSize=DesignConfig.BODY_SIZE,
+            fontName=DesignConfig.BODY_FONT,
+            textColor=DesignConfig.TEXT_COLOR,
+            leftIndent=15,  # отступ слева для элементов списка
+            spaceAfter=2,
+            leading=14,
         ))
         
         return styles
