@@ -20,6 +20,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.platypus import PageBreak, KeepTogether, Image
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+import os
 from datetime import datetime
 import sys
 from pathlib import Path
@@ -199,6 +200,14 @@ class EnhancedPDFReportV2:
         """Генерирует динамические интерпретации тестов используя AI интерпретатор с промптами *_system_res.txt"""
         interpretations = {}
         
+        print(f"[DEBUG] USE_AI_INTERPRETATIONS: {os.getenv('USE_AI_INTERPRETATIONS')}")
+        print(f"[DEBUG] OPENAI_API_KEY: {'set' if os.getenv('OPENAI_API_KEY') else 'not set'}")
+        print(f"[DEBUG] AI_AVAILABLE: {AI_AVAILABLE}")
+        try:
+            import openai
+            print(f"[DEBUG] openai version: {openai.__version__}")
+        except Exception as e:
+            print(f"[DEBUG] openai import error: {e}")
         if AI_AVAILABLE:
             try:
                 # Создаем AI интерпретатор
@@ -207,7 +216,14 @@ class EnhancedPDFReportV2:
                     print("🤖 Генерируем динамические интерпретации с помощью AI...")
                     
                     # PAEI интерпретация с промптом adizes_system_res.txt
-                    interpretations['paei'] = ai.interpret_paei(paei_scores)
+                    # Явно требуем развернутую интерпретацию в стиле психологического портрета
+                    user_prompt = (
+                        f"Проанализируй результаты теста PAEI: {', '.join([f'{k}: {v}' for k, v in paei_scores.items()])}\n"
+                        "Составь подробную интерпретацию в стиле психологического портрета, как в примерах, с выделением доминирующего стиля, сильных сторон, зон роста, рекомендаций и подходящих профессиональных ролей. Используй структуру и разметку, как в образцах."
+                    )
+                    ai_result = ai.interpret_paei(paei_scores, dialog_context=user_prompt)
+                    print("\n===== AI PAEI INTERPRETATION (DEBUG) =====\n" + ai_result + "\n==========================================\n")
+                    interpretations['paei'] = ai_result
                     
                     # Soft Skills интерпретация с промптом soft_system_res.txt  
                     interpretations['soft_skills'] = ai.interpret_soft_skills(soft_skills_scores)
@@ -451,7 +467,9 @@ class EnhancedPDFReportV2:
         # Интерпретация PAEI
         if 'paei' in ai_interpretations:
             story.append(Paragraph("<b>Интерпретация:</b>", styles['SubTitle']))
-            story.append(Paragraph(ai_interpretations['paei'], styles['Body']))
+            # Заменяем \n на <br/> для корректного многострочного вывода
+            paei_text = ai_interpretations['paei'].replace('\n', '<br/>')
+            story.append(Paragraph(paei_text, styles['Body']))
         story.append(Spacer(1, 6*mm))  # уменьшен отступ с 8мм до 6мм
         
         # === 2. SOFT SKILLS - МЯГКИЕ НАВЫКИ ===
