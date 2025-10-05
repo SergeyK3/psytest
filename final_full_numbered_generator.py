@@ -45,42 +45,68 @@ except ImportError:
 class FinalNumberedCanvas(canvas.Canvas):
     """ФИНАЛЬНЫЙ Canvas с полной нумерацией 'Стр. X из N'"""
     def __init__(self, *args, **kwargs):
+        print("🔧 FinalNumberedCanvas: __init__ вызван")
         canvas.Canvas.__init__(self, *args, **kwargs)
         self._saved_page_states = []
 
     def showPage(self):
+        print(f"🔧 FinalNumberedCanvas: showPage вызван (страница {len(self._saved_page_states) + 1})")
         self._saved_page_states.append(dict(self.__dict__))
         self._startPage()
 
     def save(self):
         """Добавляем номера страниц на все страницы"""
+        print(f"🔧 FinalNumberedCanvas: save вызван, всего страниц: {len(self._saved_page_states)}")
         num_pages = len(self._saved_page_states)
         for (page_num, page_state) in enumerate(self._saved_page_states):
+            print(f"🔧 Обрабатываем страницу {page_num + 1}")
             self.__dict__.update(page_state)
             self.draw_page_number(page_num + 1, num_pages)
             canvas.Canvas.showPage(self)
         canvas.Canvas.save(self)
+        print("🔧 FinalNumberedCanvas: save завершен")
 
     def draw_page_number(self, page_num, total_pages):
-        """НУМЕРАЦИЯ В КОЛОНТИТУЛЕ: правый верхний угол в формате X из N"""
-        # Пытаемся использовать Arial для кириллицы
-        try:
-            arial_path = "C:/Windows/Fonts/arial.ttf"
-            if os.path.exists(arial_path):
-                # Регистрируем Arial для кириллицы
-                pdfmetrics.registerFont(TTFont('Arial-Final', arial_path))
-                self.setFont("Arial-Final", 10)
-                text = f"{page_num} из {total_pages}"  # Убираем "Стр." для колонтитула
-            else:
-                raise Exception("Arial not found")
-        except:
-            # Fallback на Times-Roman
-            self.setFont("Times-Roman", 10)
-            text = f"{page_num} из {total_pages}"  # Убираем "Стр." для колонтитула
+        """РАДИКАЛЬНЫЙ ТЕСТ - рисуем нумерацию ПОВЕРХ содержимого"""
+        print(f"🔧 draw_page_number вызван для страницы {page_num} из {total_pages}")
+        self.saveState()
         
-        # Позиция в колонтитуле - правый верхний угол
-        # A4[1] - 10*mm = позиция в самом верху страницы (колонтитул)
-        self.drawRightString(A4[0] - 20*mm, A4[1] - 10*mm, text)
+        # ИСПОЛЬЗУЕМ МАКСИМАЛЬНО ПРОСТОЙ ПОДХОД
+        self.setFont("Arial", 20)  # ОЧЕНЬ БОЛЬШОЙ шрифт Arial для кириллицы
+        
+        # КРАСНЫЙ цвет для максимальной видимости
+        from reportlab.lib.colors import red
+        self.setFillColor(red)
+        self.setStrokeColor(red)
+        
+        text = f"Page {page_num} of {total_pages}"
+        print(f"🔧 Рисуем текст: {text}")
+        
+        # РИСУЕМ В НЕСКОЛЬКИХ МЕСТАХ, ВКЛЮЧАЯ ЦЕНТР СТРАНИЦЫ
+        
+        # 1. ЦЕНТР СТРАНИЦЫ - это должно быть видно точно!
+        center_x = A4[0] / 2
+        center_y = A4[1] / 2
+        self.drawCentredText(center_x, center_y, f"CENTER: {text}")
+        print(f"🔧 Нарисовали в центре: {center_x}, {center_y}")
+        
+        # 2. ПРАВЫЙ ВЕРХНИЙ УГОЛ (очень близко к краю)
+        self.drawRightString(A4[0] - 5*mm, A4[1] - 5*mm, f"TOP-RIGHT: {text}")
+        
+        # 3. ЛЕВЫЙ ВЕРХНИЙ УГОЛ 
+        self.drawString(5*mm, A4[1] - 5*mm, f"TOP-LEFT: {text}")
+        
+        # 4. ПРАВЫЙ НИЖНИЙ УГОЛ
+        self.drawRightString(A4[0] - 5*mm, 5*mm, f"BOTTOM-RIGHT: {text}")
+        
+        # 5. ЛЕВЫЙ НИЖНИЙ УГОЛ
+        self.drawString(5*mm, 5*mm, f"BOTTOM-LEFT: {text}")
+        
+        # 6. ВЕРХ ПО ЦЕНТРУ
+        self.drawCentredText(center_x, A4[1] - 10*mm, f"TOP-CENTER: {text}")
+        
+        self.restoreState()
+        print(f"🔧 draw_page_number завершен для страницы {page_num}")
 
 # Конфигурация дизайна
 class DesignConfig:
@@ -268,14 +294,24 @@ class FinalFullVolumeGenerator:
         
         return "Результаты тестирования предоставляют основу для профессионального развития."
 
-    def upload_to_google_drive(self, file_path: str, participant_name: str = None) -> Optional[str]:
-        """Загружает PDF отчет в Google Drive в месячную структуру папок"""
+    @staticmethod
+    def upload_to_google_drive(file_path: str, participant_name: str = None) -> Optional[str]:
+        """
+        ЕДИНСТВЕННАЯ УНИФИЦИРОВАННАЯ функция для загрузки PDF в Google Drive
+        
+        Args:
+            file_path: Путь к файлу для загрузки
+            participant_name: Имя участника (используется для логирования)
+            
+        Returns:
+            Optional[str]: Ссылка на файл в Google Drive или None при ошибке
+        """
         if not GOOGLE_DRIVE_AVAILABLE:
             print("⚠️ Google Drive интеграция недоступна")
             return None
         
         try:
-            print("📤 Загрузка PDF отчета в Google Drive...")
+            print(f"📤 Загрузка PDF отчета в Google Drive: {participant_name or 'неизвестный пользователь'}")
             
             # Загружаем с месячной структурой папок: PsychTest Reports/2025/10-October
             web_link = upload_to_google_drive_oauth(
@@ -304,13 +340,20 @@ class FinalFullVolumeGenerator:
                                    hexaco_scores: Dict[str, float] = None,
                                    soft_skills_scores: Dict[str, float] = None,
                                    ai_interpretations: Dict[str, str] = None,
-                                   filename: str = "final_header_numbered_report.pdf",
+                                   filename: str = None,  # Автоматическое именование если None
                                    upload_to_gdrive: bool = True) -> Tuple[str, Optional[str]]:
         """Генерирует ПОЛНЫЙ PDF отчёт с правильной нумерацией, кириллицей и загрузкой в Google Drive
         
         Returns:
             Tuple[str, Optional[str]]: (путь к файлу, ссылка на Google Drive или None)
         """
+        
+        # Автоматическое создание имени файла если не указано
+        if filename is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            safe_name = "".join(c for c in participant_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            safe_name = safe_name.replace(' ', '_')
+            filename = f"report_{safe_name}_{timestamp}.pdf"
         
         if test_date is None:
             test_date = datetime.now().strftime("%Y-%m-%d")
@@ -705,39 +748,9 @@ class FinalFullVolumeGenerator:
         # Загружаем в Google Drive (если включено)
         google_drive_link = None
         if upload_to_gdrive:
-            google_drive_link = self.upload_to_google_drive(filename, participant_name)
+            google_drive_link = FinalFullVolumeGenerator.upload_to_google_drive(filename, participant_name)
         
         return filename, google_drive_link
-
-if __name__ == "__main__":
-    try:
-        generator = FinalFullVolumeGenerator()
-        result_file, google_drive_link = generator.generate_full_volume_report()
-        
-        print(f"✅ Создан ФИНАЛЬНЫЙ PDF: {result_file}")
-        
-        # Проверяем размер
-        size = os.path.getsize(result_file)
-        size_kb = size / 1024
-        print(f"📊 Размер файла: {size} байт ({size_kb:.1f} KB)")
-        
-        if size > 50000:  # Больше 50KB
-            print("✅ Размер файла соответствует полному объему")
-            print("✅ Нумерация: 'Стр. X из N' в колонтитуле")
-            print("✅ Кодировка: Arial с поддержкой кириллицы")
-        else:
-            print("⚠️ Размер файла меньше ожидаемого")
-        
-        # Показываем результат Google Drive
-        if google_drive_link:
-            print(f"✅ Google Drive: {google_drive_link}")
-        else:
-            print("⚠️ Google Drive: загрузка не выполнена")
-            
-    except Exception as e:
-        print(f"❌ Ошибка: {e}")
-        import traceback
-        traceback.print_exc()
 
 def create_psychological_report(participant_name: str, 
                               paei_scores: Dict[str, float] = None,
@@ -746,7 +759,7 @@ def create_psychological_report(participant_name: str,
                               soft_skills_scores: Dict[str, float] = None,
                               upload_to_google_drive: bool = True) -> Tuple[str, Optional[str]]:
     """
-    Удобная функция для создания психологического отчета с автоматической загрузкой в Google Drive
+    УНИФИЦИРОВАННАЯ функция для создания психологического отчета
     
     Args:
         participant_name: Имя участника тестирования
@@ -758,35 +771,139 @@ def create_psychological_report(participant_name: str,
     
     Returns:
         Tuple[str, Optional[str]]: (путь к локальному файлу, ссылка на Google Drive или None)
-        
-    Example:
-        # Создать отчет с тестовыми данными
-        file_path, gdrive_link = create_psychological_report("Иван Петров")
-        
-        # Создать отчет с реальными результатами
-        file_path, gdrive_link = create_psychological_report(
-            "Мария Сидорова",
-            paei_scores={"P": 9, "A": 7, "E": 8, "I": 6},
-            disc_scores={"D": 8, "I": 9, "S": 6, "C": 5}
-        )
     """
     
-    # Создаем уникальное имя файла на основе имени участника и времени
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe_name = "".join(c for c in participant_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
-    safe_name = safe_name.replace(' ', '_')
-    filename = f"report_{safe_name}_{timestamp}.pdf"
-    
-    # Создаем генератор
+    # Создаем генератор и генерируем отчет с автоматическим именованием
     generator = FinalFullVolumeGenerator()
-    
-    # Генерируем отчет
     return generator.generate_full_volume_report(
         participant_name=participant_name,
         paei_scores=paei_scores,
         disc_scores=disc_scores,
         hexaco_scores=hexaco_scores,
         soft_skills_scores=soft_skills_scores,
-        filename=filename,
+        filename=None,  # Автоматическое именование
         upload_to_gdrive=upload_to_google_drive
     )
+
+# ==========================================
+# ТЕСТОВЫЕ ФУНКЦИИ (объединенные из разных скриптов)
+# ==========================================
+
+def test_custom_report():
+    """
+    Тест из test_custom_report_generator.py
+    Тестирует создание отчета с настраиваемыми параметрами
+    """
+    print("🧪 Тест создания персонального отчета...")
+    
+    # Создаем отчет с настраиваемыми данными
+    file_path, gdrive_link = create_psychological_report(
+        participant_name="Анна Тестовая",
+        paei_scores={"P": 9, "A": 6, "E": 8, "I": 7},
+        disc_scores={"D": 7, "I": 9, "S": 5, "C": 6},
+        hexaco_scores={"H": 4, "E": 3, "X": 5, "A": 4, "C": 5, "O": 4},
+        soft_skills_scores={
+            "Лидерство": 9, "Коммуникация": 10, "Креативность": 8, "Аналитика": 7,
+            "Адаптивность": 9, "Командная работа": 8, "Эмпатия": 9, 
+            "Критическое мышление": 7, "Управление временем": 8, "Решение проблем": 8
+        },
+        upload_to_google_drive=True
+    )
+    
+    print(f"✅ Локальный файл: {file_path}")
+    if gdrive_link:
+        print(f"✅ Google Drive: {gdrive_link}")
+    else:
+        print("⚠️ Загрузка в Google Drive не удалась")
+    
+    return file_path, gdrive_link
+
+def test_basic_report():
+    """
+    Базовый тест с тестовыми данными по умолчанию
+    """
+    print("🧪 Тест базового отчета с данными по умолчанию...")
+    
+    file_path, gdrive_link = create_psychological_report(
+        participant_name="Базовый Тест",
+        upload_to_google_drive=True
+    )
+    
+    print(f"✅ Локальный файл: {file_path}")
+    if gdrive_link:
+        print(f"✅ Google Drive: {gdrive_link}")
+    
+    return file_path, gdrive_link
+
+
+
+
+
+def run_all_tests():
+    """
+    Запускает единственный базовый тест (резервный)
+    """
+    print("🚀 ЗАПУСК БАЗОВОГО ТЕСТА ГЕНЕРАТОРА ОТЧЕТОВ")
+    print("=" * 60)
+    
+    print("\n📋 Базовый тест")
+    print("-" * 40)
+    try:
+        result = test_basic_report()
+        print("✅ Базовый тест прошел успешно")
+        return {"Базовый тест": {"status": "✅ Успешно", "result": result}}
+    except Exception as e:
+        print(f"❌ Ошибка в базовом тесте: {e}")
+        return {"Базовый тест": {"status": f"❌ Ошибка: {e}", "result": None}}
+
+# ==========================================
+# ГЛАВНАЯ ФУНКЦИЯ ЗАПУСКА
+# ==========================================
+
+if __name__ == "__main__":
+    import sys
+    
+    # Проверяем аргументы командной строки
+    if len(sys.argv) > 1 and sys.argv[1] == "test":
+        # Запуск всех тестов
+        run_all_tests()
+    elif len(sys.argv) > 1 and sys.argv[1] == "test-basic":
+        # Запуск базового теста
+        test_basic_report()
+    else:
+        # Стандартный запуск - создание одного тестового отчета
+        try:
+            print("🚀 ЗАПУСК СТАНДАРТНОГО ГЕНЕРАТОРА ОТЧЕТОВ")
+            print("=" * 50)
+            print("💡 Доступные команды:")
+            print("   python final_full_numbered_generator.py test")
+            print("   python final_full_numbered_generator.py test-basic")
+            print()
+            
+            generator = FinalFullVolumeGenerator()
+            result_file, google_drive_link = generator.generate_full_volume_report()
+            
+            print(f"✅ Создан ФИНАЛЬНЫЙ PDF: {result_file}")
+            
+            # Проверяем размер
+            size = os.path.getsize(result_file)
+            size_kb = size / 1024
+            print(f"📊 Размер файла: {size} байт ({size_kb:.1f} KB)")
+            
+            if size > 50000:  # Больше 50KB
+                print("✅ Размер файла соответствует полному объему")
+                print("✅ Нумерация: 'Стр. X из N' в колонтитуле")
+                print("✅ Кодировка: Arial с поддержкой кириллицы")
+            else:
+                print("⚠️ Размер файла меньше ожидаемого")
+            
+            # Показываем результат Google Drive
+            if google_drive_link:
+                print(f"✅ Google Drive: {google_drive_link}")
+            else:
+                print("⚠️ Google Drive: загрузка не выполнена")
+                
+        except Exception as e:
+            print(f"❌ Ошибка: {e}")
+            import traceback
+            traceback.print_exc()

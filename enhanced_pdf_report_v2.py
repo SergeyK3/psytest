@@ -7,6 +7,8 @@
 
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
+from io import BytesIO
+from copy import deepcopy
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from reportlab.lib.pagesizes import A4
@@ -388,9 +390,65 @@ class EnhancedPDFReportV2:
         
         # === ПЕРЕХОД НА НОВУЮ СТРАНИЦУ ===
         
-        # Сборка PDF
-        doc.build(story)
-        return out_path
+        # Сборка PDF с нумерацией страниц в верхнем правом углу
+        # Двухэтапный процесс: сначала определяем общее количество страниц, потом генерируем с нумерацией
+        
+        # Этап 1: Предварительная сборка для подсчета страниц (без нумерации)
+        temp_buffer = BytesIO()
+        temp_doc = SimpleDocTemplate(temp_buffer, pagesize=A4, 
+                                   rightMargin=DesignConfig.MARGIN*mm, 
+                                   leftMargin=DesignConfig.MARGIN*mm,
+                                   topMargin=DesignConfig.MARGIN*mm, 
+                                   bottomMargin=DesignConfig.MARGIN*mm)
+        
+        # Создаем новые экземпляры элементов для предварительной сборки
+        from copy import deepcopy
+        temp_story = deepcopy(story)
+        temp_doc.build(temp_story)
+        total_pages = temp_doc.page
+        
+        # Этап 2: Финальная сборка с правильной нумерацией
+        def add_page_number_with_total(canvas, doc):
+            """Добавляет номер страницы в верхний правый угол в формате 'Стр. X из N'"""
+            canvas.saveState()
+            canvas.setFont('Arial-Regular', 10)
+            page_num = canvas.getPageNumber()
+            text = f"Стр. {page_num} из {total_pages}"
+            # Позиция в верхнем правом углу (отступ 20мм от краев)
+            canvas.drawRightString(A4[0] - DesignConfig.MARGIN*mm, 
+                                 A4[1] - DesignConfig.MARGIN*mm + 5, 
+                                 text)
+            canvas.restoreState()
+        
+        doc.build(story, onFirstPage=add_page_number_with_total, onLaterPages=add_page_number_with_total)
+        
+        # СОХРАНЕНИЕ ТОЛЬКО В GOOGLE DRIVE (БЕЗ ЛОКАЛЬНЫХ КОПИЙ)
+        print("📤 Сохранение PDF только в Google Drive...")
+        try:
+            from oauth_google_drive import upload_to_google_drive_oauth
+            import os
+            
+            drive_link = upload_to_google_drive_oauth(str(out_path), "PsychTest Reports")
+            if drive_link:
+                print(f"✅ PDF сохранен в Google Drive!")
+                print(f"🔗 Ссылка: {drive_link}")
+                
+                # Удаляем локальный файл после успешной загрузки
+                try:
+                    os.remove(str(out_path))
+                    print(f"🗑️ Локальный файл удален: {out_path.name}")
+                except Exception as e:
+                    print(f"⚠️ Не удалось удалить локальный файл: {e}")
+                
+                # Возвращаем ссылку на Google Drive вместо локального пути
+                return drive_link
+            else:
+                print("❌ Ошибка загрузки в Google Drive - файл остается локально")
+                return out_path
+        except Exception as e:
+            print(f"❌ Ошибка загрузки в Google Drive: {e}")
+            print("📄 Файл сохранен локально")
+            return out_path
     
     def _create_all_charts(self, paei_scores: Dict, disc_scores: Dict, 
                          hexaco_scores: Dict, soft_skills_scores: Dict) -> Dict[str, Path]:

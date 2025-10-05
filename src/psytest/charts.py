@@ -302,26 +302,41 @@ def make_pie_chart(labels, values, out_path: Path, title: str = "") -> Path:
     
     # Настройка matplotlib для качественной печати
     plt.rcParams.update({
-        'font.size': 11,
+        'font.size': 12,
         'axes.titlesize': 14,
-        'axes.labelsize': 11,
-        'xtick.labelsize': 10,
-        'ytick.labelsize': 10,
-        'legend.fontsize': 10,
+        'axes.labelsize': 12,
+        'xtick.labelsize': 11,
+        'ytick.labelsize': 11,
+        'legend.fontsize': 11,
         'figure.titlesize': 16
     })
     
-    # Создание круговой диаграммы
+    # Создание круговой диаграммы с отключенными автоподписями
     wedges, texts, autotexts = ax.pie(
         values,
-        labels=[f'{label}\n{value} баллов\n({percentage:.1f}%)' 
-                for label, value, percentage in zip(labels, values, percentages)],
+        labels=None,  # Убираем внешние лейблы
         colors=colors[:len(labels)],
-        autopct='',
+        autopct='',  # Отключаем автоматические проценты - они мешают тексту
         startangle=90,
-        textprops={'fontsize': 10, 'weight': 'bold', 'color': PRINT_COLORS['primary']},
-        wedgeprops={'linewidth': 1, 'edgecolor': PRINT_COLORS['primary']}
+        wedgeprops={'linewidth': 2, 'edgecolor': 'white'}
     )
+    
+    # Добавляем текст внутри сегментов с улучшенным позиционированием
+    for i, (wedge, label, value, percentage) in enumerate(zip(wedges, labels, values, percentages)):
+        # Вычисляем угол для размещения текста
+        angle = (wedge.theta2 + wedge.theta1) / 2
+        
+        # Размещаем текст ближе к краю сегмента, но не слишком близко
+        radius_factor = 0.7 if percentage > 15 else 0.8  # Для больших сегментов - ближе к центру
+        x = radius_factor * wedge.r * np.cos(np.radians(angle))
+        y = radius_factor * wedge.r * np.sin(np.radians(angle))
+        
+        # Размещаем текст внутри сегмента
+        if percentage > 8:  # Только для достаточно больших сегментов
+            # Нежирный текст с увеличенным размером и прозрачным фоном
+            ax.text(x, y, f'{label}\n{value} баллов\n{percentage:.1f}%', 
+                   ha='center', va='center', fontsize=18, fontweight='normal',  # Нежирный текст
+                   color='black', wrap=True)  # Убрали bbox - теперь фон полностью прозрачный
     
     # Заголовок
     if title:
