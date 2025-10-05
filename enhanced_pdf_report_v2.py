@@ -183,30 +183,20 @@ class EnhancedPDFReportV2:
         
         # === ЗАГОЛОВОК ДОКУМЕНТА ===
         story.append(Paragraph("ОЦЕНКА КОМАНДНЫХ НАВЫКОВ", styles['MainTitle']))
-        story.append(Spacer(1, 8*mm))
+        story.append(Spacer(1, 4*mm))  # уменьшен отступ с 8мм до 4мм
         
-        # === ИНФОРМАЦИЯ О ТЕСТИРУЕМОМ ===
-        info_data = [
-            ['Имя сотрудника:', participant_name],
-            ['Дата тестирования:', test_date],
-        ]
+        # === ИМЯ УЧАСТНИКА (ПО ЦЕНТРУ, УВЕЛИЧЕННЫЙ ШРИФТ) ===
+        story.append(Paragraph(participant_name, styles['ParticipantName']))
+        story.append(Spacer(1, 2*mm))
         
-        info_table = Table(info_data, colWidths=[50*mm, 80*mm])
-        info_table.setStyle(TableStyle([
-            ('FONT', (0, 0), (-1, -1), DesignConfig.BODY_FONT, 10),
-            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-            ('ALIGN', (1, 0), (1, -1), 'LEFT'),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TEXTCOLOR', (0, 0), (0, -1), DesignConfig.PRIMARY_COLOR),
-            ('FONTNAME', (0, 0), (0, -1), DesignConfig.TITLE_FONT),
-        ]))
-        
-        story.append(info_table)
-        story.append(Spacer(1, 10*mm))
+        # === ДАТА ТЕСТИРОВАНИЯ ===
+        date_text = f"Дата тестирования: {test_date}"
+        story.append(Paragraph(date_text, styles['Body']))
+        story.append(Spacer(1, 6*mm))  # уменьшен отступ с 10мм до 6мм
         
         # === ОБЩЕЕ ЗАКЛЮЧЕНИЕ И РЕКОМЕНДАЦИИ ===
         story.append(Paragraph("ОБЩЕЕ ЗАКЛЮЧЕНИЕ И РЕКОМЕНДАЦИИ", styles['SectionTitle']))
-        story.append(Spacer(1, 5*mm))
+        story.append(Spacer(1, 3*mm))  # уменьшен отступ с 5мм до 3мм
         
         # Определяем доминирующие черты для заключения
         max_paei = max(paei_scores, key=paei_scores.get)
@@ -225,19 +215,21 @@ class EnhancedPDFReportV2:
         о профессиональном профиле и потенциале развития.
         """
         story.append(Paragraph(synthesis_text, styles['Body']))
-        story.append(Spacer(1, 5*mm))
+        story.append(Spacer(1, 3*mm))  # уменьшен отступ с 5мм до 3мм
         
-        # Сводка по ключевым характеристикам
-        story.append(Paragraph("<b>Ключевые характеристики профиля:</b>", styles['SubTitle']))
+        # Сводка по ключевым характеристикам и методикам
+        story.append(Paragraph("<b>Ключевые характеристики профиля и использованные методики:</b>", styles['SubTitle']))
         
-        key_traits = f"""
-        • <b>Управленческий стиль по Адизесу:</b> Преобладает роль {paei_names.get(max_paei, max_paei)} ({paei_scores[max_paei]} баллов)<br/>
-        • <b>Поведенческий тип DISC:</b> {disc_names.get(max_disc, max_disc)} ({disc_scores[max_disc]} баллов)<br/>
-        • <b>Выраженная личностная черта HEXACO:</b> {max_hexaco} ({hexaco_scores[max_hexaco]} баллов)<br/>
-        • <b>Наиболее развитый навык:</b> {max_soft} ({soft_skills_scores[max_soft]} баллов)
+        # Результаты тестирования
+        results_text = f"""
+        <b>Результаты тестирования:</b><br/>
+        • <b>Тест Адизеса (PAEI)</b> - оценка управленческих ролей и стилей руководства (5 вопросов по 4 типам). Преобладает роль {paei_names.get(max_paei, max_paei)} - {paei_scores[max_paei]} баллов<br/>
+        • <b>Оценка Soft Skills</b> - анализ надпрофессиональных компетенций (10 вопросов по 10-балльной шкале). Наиболее развитый навык: {max_soft} - {soft_skills_scores[max_soft]} баллов<br/>
+        • <b>HEXACO</b> - современная шестифакторная модель личности (10 вопросов по 5-балльной шкале). X = eXtraversion (Экстраверсия) ({hexaco_scores.get('Экстраверсия', 'Н/Д')} баллов)<br/>
+        • <b>DISC</b> - методика оценки поведенческих особенностей и стилей (8 вопросов по 4 типам). {disc_names.get(max_disc, max_disc)} ({disc_scores[max_disc]} баллов)
         """
-        story.append(Paragraph(key_traits, styles['Body']))
-        story.append(Spacer(1, 8*mm))
+        story.append(Paragraph(results_text, styles['Body']))
+        story.append(Spacer(1, 6*mm))
         
         # Профессиональные рекомендации
         story.append(Paragraph("<b>Рекомендации по профессиональному развитию:</b>", styles['SubTitle']))
@@ -258,18 +250,7 @@ class EnhancedPDFReportV2:
         • Выстраивать команду с учетом комплементарных ролей по DISC
         """
         story.append(Paragraph(recommendations, styles['Body']))
-        story.append(Spacer(1, 10*mm))
-        
-        # Методологическая справка
-        story.append(Paragraph("<b>Использованные методики:</b>", styles['SubTitle']))
-        methodology = """
-        • <b>Тест Адизеса (PAEI)</b> - оценка управленческих ролей и стилей руководства<br/>
-        • <b>Оценка Soft Skills</b> - анализ надпрофессиональных компетенций<br/>
-        • <b>HEXACO</b> - современная модель личности (Lee & Ashton, 2004)<br/>
-        • <b>DISC</b> - методика оценки поведенческих стилей (Marston, 1928)
-        """
-        story.append(Paragraph(methodology, styles['Body']))
-        story.append(Spacer(1, 15*mm))
+        story.append(Spacer(1, 6*mm))  # уменьшен отступ с 10мм до 6мм
         
         # Переход к детальным разделам
         story.append(PageBreak())
@@ -302,7 +283,7 @@ class EnhancedPDFReportV2:
         if 'paei' in ai_interpretations:
             story.append(Paragraph("<b>Интерпретация:</b>", styles['SubTitle']))
             story.append(Paragraph(ai_interpretations['paei'], styles['Body']))
-        story.append(Spacer(1, 8*mm))
+        story.append(Spacer(1, 6*mm))  # уменьшен отступ с 8мм до 6мм
         
         # === 2. SOFT SKILLS - МЯГКИЕ НАВЫКИ ===
         story.append(Paragraph("2. SOFT SKILLS - ОЦЕНКА МЯГКИХ НАВЫКОВ", styles['SectionTitle']))
@@ -535,6 +516,18 @@ class EnhancedPDFReportV2:
             textColor=DesignConfig.TEXT_COLOR,
             spaceAfter=4,
             leading=14,  # было 12, увеличено для лучшей читаемости
+        ))
+        
+        # Имя участника (увеличенный шрифт, по центру)
+        styles.add(ParagraphStyle(
+            name='ParticipantName',
+            parent=styles['Normal'],
+            fontSize=14,  # увеличенный шрифт
+            fontName=DesignConfig.TITLE_FONT,
+            textColor=DesignConfig.PRIMARY_COLOR,
+            alignment=1,  # CENTER
+            spaceAfter=2,
+            spaceBefore=2,
         ))
         
         return styles
