@@ -35,7 +35,7 @@ except ImportError:
     print("⚠️ AI интерпретатор недоступен - будут использованы статические интерпретации")
 import numpy as np
 
-from src.psytest.charts import make_radar, make_bar_chart
+from src.psytest.charts import make_radar, make_bar_chart, make_paei_combined_chart, make_disc_combined_chart
 
 # Константы для минималистичного дизайна
 class DesignConfig:
@@ -53,10 +53,12 @@ class DesignConfig:
     PAGE_HEIGHT = 297
     MARGIN = 20
     
-    # Размеры графиков (в мм) - оптимизированы для баланса с текстом
-    RADAR_SIZE = 100  # было 120, уменьшено для баланса с увеличенным текстом
-    BAR_CHART_WIDTH = 160
-    BAR_CHART_HEIGHT = 80  # было 60
+    # Размеры графиков (в мм) - расширены на всю ширину страницы
+    RADAR_SIZE = 160  # увеличено для использования полной ширины
+    BAR_CHART_WIDTH = 180  # увеличено для полной ширины
+    BAR_CHART_HEIGHT = 90  # увеличено пропорционально
+    PAEI_COMBINED_WIDTH = 180  # специальный размер для комбинированной диаграммы PAEI
+    PAEI_COMBINED_HEIGHT = 90  # высота комбинированной диаграммы
     
     # Шрифты (используем встроенные Unicode шрифты)
     TITLE_FONT = "Times-Bold"
@@ -82,6 +84,18 @@ class EnhancedCharts:
                                    title: str, out_path: Path) -> Path:
         """Создаёт минималистичную столбчатую диаграмму"""
         return make_bar_chart(labels, values, out_path, title=title, max_value=10)
+    
+    @staticmethod
+    def create_paei_combined_chart(labels: List[str], values: List[float],
+                                  title: str, out_path: Path) -> Path:
+        """Создаёт комбинированную диаграмму PAEI (столбиковая + круговая)"""
+        return make_paei_combined_chart(labels, values, out_path, title=title)
+    
+    @staticmethod
+    def create_disc_combined_chart(labels: List[str], values: List[float],
+                                  title: str, out_path: Path) -> Path:
+        """Создаёт комбинированную диаграмму DISC (столбиковая + круговая)"""
+        return make_disc_combined_chart(labels, values, out_path, title=title)
 
 
 class EnhancedPDFReportV2:
@@ -151,22 +165,26 @@ class EnhancedPDFReportV2:
         """Добавляет диаграмму в документ с оптимизированными размерами"""
         if chart_path.exists():
             try:
-                # Используем увеличенные размеры из конфигурации если не указаны явно
-                if width is None:
+                # Специальные размеры для комбинированных диаграмм
+                if "paei_combined" in str(chart_path) or "disc_combined" in str(chart_path):
+                    width = DesignConfig.PAEI_COMBINED_WIDTH
+                    height = DesignConfig.PAEI_COMBINED_HEIGHT
+                # Используем стандартные размеры если не указаны явно
+                elif width is None:
                     width = DesignConfig.RADAR_SIZE
-                if height is None:
-                    height = DesignConfig.RADAR_SIZE
+                    if height is None:
+                        height = DesignConfig.RADAR_SIZE
                     
                 # Конвертируем размеры в миллиметры
                 img = Image(str(chart_path), width=width*mm, height=height*mm)
                 img.hAlign = 'CENTER'
                 story.append(img)
-                story.append(Spacer(1, 5*mm))
+                story.append(Spacer(1, 3*mm))  # уменьшен с 5мм до 3мм
             except Exception as e:
                 print(f"⚠️  Ошибка при добавлении диаграммы {chart_path}: {e}")
                 # Добавляем плейсхолдер
                 story.append(Paragraph(f"[Диаграмма: {chart_path.name}]", self._get_custom_styles()['Body']))
-                story.append(Spacer(1, 5*mm))
+                story.append(Spacer(1, 3*mm))  # уменьшен с 5мм до 3мм
     
     def _generate_dynamic_interpretations(self, paei_scores: Dict[str, float], 
                                         disc_scores: Dict[str, float],
@@ -309,7 +327,7 @@ class EnhancedPDFReportV2:
         
         # === ЗАГОЛОВОК ДОКУМЕНТА ===
         story.append(Paragraph("ОЦЕНКА КОМАНДНЫХ НАВЫКОВ", styles['MainTitle']))
-        story.append(Spacer(1, 4*mm))  # уменьшен отступ с 8мм до 4мм
+        story.append(Spacer(1, 2*mm))  # уменьшен отступ для экономии места
         
         # === ИМЯ УЧАСТНИКА (ПО ЦЕНТРУ, УВЕЛИЧЕННЫЙ ШРИФТ) ===
         story.append(Paragraph(participant_name, styles['ParticipantName']))
@@ -460,7 +478,7 @@ class EnhancedPDFReportV2:
             story.append(Paragraph("<b>Интерпретация:</b>", styles['SubTitle']))
             story.append(Paragraph(ai_interpretations['soft_skills'], styles['Body']))
         
-        story.append(Spacer(1, 8*mm))
+        story.append(Spacer(1, 4*mm))  # уменьшен с 8мм до 4мм
         
         # === 3. ТЕСТ HEXACO - ЛИЧНОСТНЫЕ ЧЕРТЫ ===
         story.append(Paragraph("3. ТЕСТ HEXACO - МОДЕЛЬ ЛИЧНОСТИ", styles['SectionTitle']))
@@ -495,7 +513,7 @@ class EnhancedPDFReportV2:
         if 'hexaco' in ai_interpretations:
             story.append(Paragraph("<b>Интерпретация:</b>", styles['SubTitle']))
             story.append(Paragraph(ai_interpretations['hexaco'], styles['Body']))
-        story.append(Spacer(1, 8*mm))
+        story.append(Spacer(1, 4*mm))  # уменьшен с 8мм до 4мм
         
         # === 4. ТЕСТ DISC - ПОВЕДЕНЧЕСКИЕ СТИЛИ ===
         story.append(Paragraph("4. ТЕСТ DISC - МОДЕЛЬ ПОВЕДЕНИЯ", styles['SectionTitle']))
@@ -528,7 +546,7 @@ class EnhancedPDFReportV2:
         if 'disc' in ai_interpretations:
             story.append(Paragraph("<b>Интерпретация:</b>", styles['SubTitle']))
             story.append(Paragraph(ai_interpretations['disc'], styles['Body']))
-        story.append(Spacer(1, 8*mm))
+        story.append(Spacer(1, 4*mm))  # уменьшен с 8мм до 4мм
         
         # === ПЕРЕХОД НА НОВУЮ СТРАНИЦУ ===
         
@@ -597,12 +615,12 @@ class EnhancedPDFReportV2:
         """Создаёт все радарные диаграммы для отчета"""
         charts = {}
         
-        # PAEI диаграмма (радарная)
+        # PAEI диаграмма (комбинированная - столбиковая + круговая)
         paei_labels = list(paei_scores.keys())
         paei_values = list(paei_scores.values())
-        paei_path = self.template_dir / "paei_radar.png"
-        EnhancedCharts.create_minimalist_radar(paei_labels, paei_values, 
-                                             "PAEI (Адизес)", paei_path)
+        paei_path = self.template_dir / "paei_combined.png"
+        EnhancedCharts.create_paei_combined_chart(paei_labels, paei_values, 
+                                                "PAEI (Адизес) - Управленческие роли", paei_path)
         charts['paei'] = paei_path
         
         # Soft Skills диаграмма (радарная)
@@ -621,12 +639,12 @@ class EnhancedPDFReportV2:
                                              "HEXACO", hexaco_path)
         charts['hexaco'] = hexaco_path
         
-        # DISC диаграмма (радарная)  
+        # DISC диаграмма (комбинированная - столбиковая + круговая)  
         disc_labels = list(disc_scores.keys())
         disc_values = list(disc_scores.values())
-        disc_path = self.template_dir / "disc_radar.png"
-        EnhancedCharts.create_minimalist_radar(disc_labels, disc_values,
-                                             "DISC", disc_path)
+        disc_path = self.template_dir / "disc_combined.png"
+        EnhancedCharts.create_disc_combined_chart(disc_labels, disc_values,
+                                                "DISC - Поведенческие стили", disc_path)
         charts['disc'] = disc_path
         
         return charts
