@@ -7,6 +7,10 @@
 from enhanced_pdf_report_v2 import EnhancedPDFReportV2
 from datetime import datetime
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Загружаем переменные окружения из .env
+load_dotenv()
 
 def run_enhanced_report():
     """Запускает enhanced_pdf_report_v2 с правильными параметрами"""
