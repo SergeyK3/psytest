@@ -333,20 +333,19 @@ class EnhancedPDFReportV2:
         
         # === ЗАГОЛОВОК ДОКУМЕНТА ===
         story.append(Paragraph("ОЦЕНКА КОМАНДНЫХ НАВЫКОВ", styles['MainTitle']))
-        story.append(Spacer(1, 2*mm))  # уменьшен отступ для экономии места
-        
-        # === ИМЯ УЧАСТНИКА (ПО ЦЕНТРУ, УВЕЛИЧЕННЫЙ ШРИФТ) ===
-        story.append(Paragraph(participant_name, styles['ParticipantName']))
-        story.append(Spacer(1, 2*mm))
-        
+        story.append(Spacer(1, 1*mm))
+        # === ИМЯ УЧАСТНИКА (ПО ЦЕНТРУ, уменьшенный шрифт) ===
+        if participant_name.strip():
+            story.append(Paragraph(participant_name, styles['ParticipantName']))
+            story.append(Spacer(1, 1*mm))
         # === ДАТА ТЕСТИРОВАНИЯ ===
         date_text = f"Дата тестирования: {test_date}"
         story.append(Paragraph(date_text, styles['Body']))
-        story.append(Spacer(1, 6*mm))  # уменьшен отступ с 10мм до 6мм
+        story.append(Spacer(1, 2*mm))
         
         # === ОБЩЕЕ ЗАКЛЮЧЕНИЕ И РЕКОМЕНДАЦИИ ===
         story.append(Paragraph("ОБЩЕЕ ЗАКЛЮЧЕНИЕ И РЕКОМЕНДАЦИИ", styles['SectionTitle']))
-        story.append(Spacer(1, 3*mm))  # уменьшен отступ с 5мм до 3мм
+        story.append(Spacer(1, 2*mm))
         
         # Определяем доминирующие черты для заключения
         max_paei = max(paei_scores, key=paei_scores.get)
@@ -371,15 +370,17 @@ class EnhancedPDFReportV2:
         story.append(Paragraph("<b>Ключевые характеристики профиля и использованные методики:</b>", styles['SubTitle']))
         
         # Результаты тестирования с детальным описанием методик
-        results_text = f"""
-        <b>Результаты тестирования:</b><br/>
-        • <b>Тест Адизеса (PAEI)</b> - оценка управленческих ролей и стилей руководства (5 вопросов по 4 типам). Преобладает роль {paei_names.get(max_paei, max_paei)} - {paei_scores[max_paei]} баллов<br/>
-        • <b>Оценка Soft Skills</b> - анализ надпрофессиональных компетенций (10 вопросов по 10-балльной шкале). Наиболее развитый навык: {max_soft} - {soft_skills_scores[max_soft]} баллов<br/>
-        • <b>HEXACO</b> - современная шестифакторная модель личности (10 вопросов по 5-балльной шкале). Выраженная личностная черта: {max_hexaco} ({hexaco_scores[max_hexaco]} баллов)<br/>
-        • <b>DISC</b> - методика оценки поведенческих особенностей и стилей (8 вопросов по 4 типам). {disc_names.get(max_disc, max_disc)} ({disc_scores[max_disc]} баллов)
-        """
-        story.append(Paragraph(results_text, styles['Body']))
-        story.append(Spacer(1, 3*mm))
+        # Многострочный список с выравниванием по bullet
+        story.append(Paragraph("<b>Результаты тестирования:</b>", styles['Body']))
+        bullet_items = [
+            f"<b>Тест Адизеса (PAEI)</b> - оценка управленческих ролей и стилей руководства (5 вопросов по 4 типам). Преобладает роль {paei_names.get(max_paei, max_paei)} - {paei_scores[max_paei]} баллов",
+            f"<b>Оценка Soft Skills</b> - анализ надпрофессиональных компетенций (10 вопросов по 10-балльной шкале). Наиболее развитый навык: {max_soft} - {soft_skills_scores[max_soft]} баллов",
+            f"<b>HEXACO</b> - современная шестифакторная модель личности (10 вопросов по 5-балльной шкале). Выраженная личностная черта: {max_hexaco} ({hexaco_scores[max_hexaco]} баллов)",
+            f"<b>DISC</b> - методика оценки поведенческих особенностей и стилей (8 вопросов по 4 типам). {disc_names.get(max_disc, max_disc)} ({disc_scores[max_disc]} баллов)"
+        ]
+        for item in bullet_items:
+            story.append(Paragraph(item, style=styles['ListWithIndent'], bulletText='•'))
+        story.append(Spacer(1, 2*mm))
         
         # Описание использованных методик
         story.append(Paragraph("<b>Использованные методики:</b>", styles['SubTitle']))
@@ -390,7 +391,8 @@ class EnhancedPDFReportV2:
         • <b>DISC</b> - методика оценки поведенческих стилей (Marston, 1928)
         """
         story.append(Paragraph(methodologies_text, styles['Body']))
-        story.append(Spacer(1, 6*mm))
+        if methodologies_text.strip():
+            story.append(Spacer(1, 2*mm))
         
         # Профессиональные рекомендации
         story.append(Paragraph("<b>Рекомендации по профессиональному развитию:</b>", styles['SubTitle']))
@@ -428,20 +430,19 @@ class EnhancedPDFReportV2:
         story.append(Spacer(1, 3*mm))
         
         # Расшифровка PAEI
-        paei_description = """
-        <b>Расшифровка PAEI:</b><br/>
-        • <b>P (Producer - Производитель)</b> - ориентация на результат, выполнение задач, достижение целей<br/>
-        • <b>A (Administrator - Администратор)</b> - организация процессов, контроль, систематизация работы<br/>
-        • <b>E (Entrepreneur - Предприниматель)</b> - инновации, стратегическое мышление, креативность<br/>
-        • <b>I (Integrator - Интегратор)</b> - командная работа, мотивация людей, создание единства
-        """
-        story.append(Paragraph(paei_description, styles['Body']))
+        story.append(Paragraph("<b>Расшифровка PAEI:</b>", styles['Body']))
+        paei_bullets = [
+            f"<b>P (Producer - Производитель)</b> - ориентация на результат, выполнение задач, достижение целей: {paei_scores.get('P', '')} баллов",
+            f"<b>A (Administrator - Администратор)</b> - организация процессов, контроль, систематизация работы: {paei_scores.get('A', '')} баллов.",
+            f"<b>E (Entrepreneur - Предприниматель)</b> - инновации, стратегическое мышление, креативность: {paei_scores.get('E', '')} баллов.",
+            f"<b>I (Integrator - Интегратор)</b> - командная работа, мотивация людей, создание единства: {paei_scores.get('I', '')} баллов. <br/><b>Результаты:</b> {self._format_scores(paei_scores)}"
+        ]
+        for item in paei_bullets:
+            story.append(Paragraph(item, style=styles['ListWithIndent'], bulletText='•'))
         story.append(Spacer(1, 5*mm))
         
         # Результаты PAEI
-        paei_results = f"<b>Результаты:</b> {self._format_scores(paei_scores)}"
-        story.append(Paragraph(paei_results, styles['Body']))
-        story.append(Spacer(1, 3*mm))
+    # (Строка с результатами теперь внутри последнего пункта списка)
         
         # Встраиваем диаграмму PAEI
         if 'paei' in chart_paths:
@@ -707,12 +708,12 @@ class EnhancedPDFReportV2:
         styles.add(ParagraphStyle(
             name='ParticipantName',
             parent=styles['Normal'],
-            fontSize=14,  # увеличенный шрифт
+            fontSize=12,  # уменьшенный шрифт
             fontName=DesignConfig.TITLE_FONT,
             textColor=DesignConfig.PRIMARY_COLOR,
             alignment=1,  # CENTER
-            spaceAfter=2,
-            spaceBefore=2,
+            spaceAfter=1,
+            spaceBefore=1,
         ))
         
         # Стиль для списков с отступом (как на скриншоте)
