@@ -21,6 +21,18 @@ from reportlab.platypus import PageBreak, KeepTogether, Image
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from datetime import datetime
+import sys
+from pathlib import Path
+
+# Добавляем путь к модулям проекта
+sys.path.append(str(Path(__file__).parent / "src"))
+
+try:
+    from src.psytest.ai_interpreter import get_ai_interpreter
+    AI_AVAILABLE = True
+except ImportError:
+    AI_AVAILABLE = False
+    print("⚠️ AI интерпретатор недоступен - будут использованы статические интерпретации")
 import numpy as np
 
 from src.psytest.charts import make_radar, make_bar_chart
@@ -156,6 +168,112 @@ class EnhancedPDFReportV2:
                 story.append(Paragraph(f"[Диаграмма: {chart_path.name}]", self._get_custom_styles()['Body']))
                 story.append(Spacer(1, 5*mm))
     
+    def _generate_dynamic_interpretations(self, paei_scores: Dict[str, float], 
+                                        disc_scores: Dict[str, float],
+                                        hexaco_scores: Dict[str, float], 
+                                        soft_skills_scores: Dict[str, float]) -> Dict[str, str]:
+        """Генерирует динамические интерпретации тестов используя AI интерпретатор с промптами *_system_res.txt"""
+        interpretations = {}
+        
+        if AI_AVAILABLE:
+            try:
+                # Создаем AI интерпретатор
+                ai = get_ai_interpreter()
+                if ai:
+                    print("🤖 Генерируем динамические интерпретации с помощью AI...")
+                    
+                    # PAEI интерпретация с промптом adizes_system_res.txt
+                    interpretations['paei'] = ai.interpret_paei(paei_scores)
+                    
+                    # Soft Skills интерпретация с промптом soft_system_res.txt  
+                    interpretations['soft_skills'] = ai.interpret_soft_skills(soft_skills_scores)
+                    
+                    # HEXACO интерпретация с промптом hexaco_system_res.txt
+                    interpretations['hexaco'] = ai.interpret_hexaco(hexaco_scores)
+                    
+                    # DISC интерпретация с промптом disk_system_res.txt
+                    interpretations['disc'] = ai.interpret_disc(disc_scores)
+                    
+                    print("✅ Динамические интерпретации сгенерированы успешно")
+                    return interpretations
+                    
+            except Exception as e:
+                print(f"⚠️ Ошибка AI интерпретации: {e}")
+        
+        print("📝 Используем статические интерпретации...")
+        # Fallback к статическим интерпретациям
+        try:
+            # PAEI интерпретация
+            paei_text = f"""
+            На основе тестирования Адизеса получены следующие результаты:
+            
+            {self._format_scores_detailed(paei_scores)}
+            
+            Доминирующий стиль: {max(paei_scores, key=paei_scores.get)} ({max(paei_scores.values())} баллов)
+            
+            Анализ показывает сбалансированное/доминирующее распределение управленческих ролей с акцентом на 
+            {max(paei_scores, key=paei_scores.get).lower()}.
+            """
+            interpretations['paei'] = paei_text.strip()
+            
+            # Soft Skills интерпретация
+            top_soft = max(soft_skills_scores, key=soft_skills_scores.get)
+            soft_text = f"""
+            Анализ мягких навыков выявляет следующий профиль:
+            
+            {self._format_scores_detailed(soft_skills_scores)}
+            
+            Наиболее развитый навык: {top_soft} ({soft_skills_scores[top_soft]} баллов)
+            
+            Демонстрирует высокий уровень развития в области {top_soft.lower()}, что является ключевым 
+            преимуществом для профессиональной деятельности.
+            """
+            interpretations['soft_skills'] = soft_text.strip()
+            
+            # HEXACO интерпретация  
+            top_hexaco = max(hexaco_scores, key=hexaco_scores.get)
+            hexaco_text = f"""
+            Анализ личностного профиля HEXACO:
+            
+            {self._format_scores_detailed(hexaco_scores)}
+            
+            Наиболее выраженная черта: {top_hexaco} ({hexaco_scores[top_hexaco]} баллов)
+            
+            Профиль характеризуется высокими показателями по шкале {top_hexaco.lower()}, что указывает на 
+            соответствующие личностные особенности и поведенческие тенденции.
+            """
+            interpretations['hexaco'] = hexaco_text.strip()
+            
+            # DISC интерпретация
+            top_disc = max(disc_scores, key=disc_scores.get)
+            disc_text = f"""
+            Анализ поведенческого профиля DISC:
+            
+            {self._format_scores_detailed(disc_scores)}
+            
+            Доминирующий стиль: {top_disc} ({disc_scores[top_disc]} баллов)
+            
+            Поведенческий профиль характеризуется преобладанием стиля {top_disc.lower()}, что определяет 
+            основные паттерны взаимодействия и рабочие предпочтения.
+            """
+            interpretations['disc'] = disc_text.strip()
+            
+        except Exception as e:
+            print(f"⚠️ Ошибка генерации статических интерпретаций: {e}")
+            # Базовые интерпретации
+            interpretations = {
+                'paei': 'Результаты теста Адизеса показывают управленческий профиль.',
+                'soft_skills': 'Анализ мягких навыков демонстрирует профессиональные компетенции.',
+                'hexaco': 'Личностный профиль HEXACO характеризует основные черты личности.',
+                'disc': 'Поведенческий профиль DISC отражает стили взаимодействия.'
+            }
+        
+        return interpretations
+
+    def _format_scores_detailed(self, scores: Dict[str, float]) -> str:
+        """Форматирует результаты в детальную строку"""
+        return "\n".join([f"• {k}: {v} баллов" for k, v in scores.items()])
+
     def generate_enhanced_report(self, 
                                participant_name: str,
                                test_date: str,
@@ -166,6 +284,14 @@ class EnhancedPDFReportV2:
                                ai_interpretations: Dict[str, str],
                                out_path: Path) -> Path:
         """Генерирует улучшенный PDF отчёт с детальными описаниями"""
+        
+        # Генерируем динамические интерпретации
+        dynamic_interpretations = self._generate_dynamic_interpretations(
+            paei_scores, disc_scores, hexaco_scores, soft_skills_scores
+        )
+        
+        # Используем динамические интерпретации вместо переданных
+        ai_interpretations = dynamic_interpretations
         
         # Создание PDF документа
         doc = SimpleDocTemplate(str(out_path), pagesize=A4,
@@ -220,15 +346,26 @@ class EnhancedPDFReportV2:
         # Сводка по ключевым характеристикам и методикам
         story.append(Paragraph("<b>Ключевые характеристики профиля и использованные методики:</b>", styles['SubTitle']))
         
-        # Результаты тестирования
+        # Результаты тестирования с детальным описанием методик
         results_text = f"""
         <b>Результаты тестирования:</b><br/>
         • <b>Тест Адизеса (PAEI)</b> - оценка управленческих ролей и стилей руководства (5 вопросов по 4 типам). Преобладает роль {paei_names.get(max_paei, max_paei)} - {paei_scores[max_paei]} баллов<br/>
         • <b>Оценка Soft Skills</b> - анализ надпрофессиональных компетенций (10 вопросов по 10-балльной шкале). Наиболее развитый навык: {max_soft} - {soft_skills_scores[max_soft]} баллов<br/>
-        • <b>HEXACO</b> - современная шестифакторная модель личности (10 вопросов по 5-балльной шкале). X = eXtraversion (Экстраверсия) ({hexaco_scores.get('Экстраверсия', 'Н/Д')} баллов)<br/>
+        • <b>HEXACO</b> - современная шестифакторная модель личности (10 вопросов по 5-балльной шкале). Выраженная личностная черта: {max_hexaco} ({hexaco_scores[max_hexaco]} баллов)<br/>
         • <b>DISC</b> - методика оценки поведенческих особенностей и стилей (8 вопросов по 4 типам). {disc_names.get(max_disc, max_disc)} ({disc_scores[max_disc]} баллов)
         """
         story.append(Paragraph(results_text, styles['Body']))
+        story.append(Spacer(1, 3*mm))
+        
+        # Описание использованных методик
+        story.append(Paragraph("<b>Использованные методики:</b>", styles['SubTitle']))
+        methodologies_text = """
+        • <b>Тест Адизеса (PAEI)</b> - оценка управленческих ролей и стилей руководства<br/>
+        • <b>Оценка Soft Skills</b> - анализ надпрофессиональных компетенций<br/>
+        • <b>HEXACO</b> - современная модель личности (Lee & Ashton, 2004)<br/>
+        • <b>DISC</b> - методика оценки поведенческих стилей (Marston, 1928)
+        """
+        story.append(Paragraph(methodologies_text, styles['Body']))
         story.append(Spacer(1, 6*mm))
         
         # Профессиональные рекомендации
@@ -260,7 +397,11 @@ class EnhancedPDFReportV2:
         
         # === 1. ТЕСТ АДИЗЕСА (PAEI) ===
         story.append(Paragraph("1. ТЕСТ АДИЗЕСА (PAEI) - УПРАВЛЕНЧЕСКИЕ РОЛИ", styles['SectionTitle']))
-        story.append(Spacer(1, 5*mm))
+        
+        # Описание теста в красной рамке (как на скриншоте)
+        test_description = "Тест Адизеса (PAEI) - оценка управленческих ролей и стилей руководства (5 вопросов по 4 типам)."
+        story.append(Paragraph(test_description, styles['Body']))
+        story.append(Spacer(1, 3*mm))
         
         # Расшифровка PAEI
         paei_description = """
@@ -290,7 +431,11 @@ class EnhancedPDFReportV2:
         
         # === 2. SOFT SKILLS - МЯГКИЕ НАВЫКИ ===
         story.append(Paragraph("2. SOFT SKILLS - ОЦЕНКА МЯГКИХ НАВЫКОВ", styles['SectionTitle']))
-        story.append(Spacer(1, 5*mm))
+        
+        # Описание теста в красной рамке (как на скриншоте)
+        test_description = "Оценка Soft Skills - анализ надпрофессиональных компетенций (10 вопросов по 10-балльной шкале)."
+        story.append(Paragraph(test_description, styles['Body']))
+        story.append(Spacer(1, 3*mm))
         
         soft_description = """
         <b>Soft Skills</b> - это надпрофессиональные навыки, которые помогают решать жизненные и рабочие задачи 
@@ -310,11 +455,20 @@ class EnhancedPDFReportV2:
         if 'soft_skills' in chart_paths:
             self._add_chart_to_story(story, chart_paths['soft_skills'])
         
+        # Интерпретация Soft Skills (динамическая из промптов)
+        if 'soft_skills' in ai_interpretations:
+            story.append(Paragraph("<b>Интерпретация:</b>", styles['SubTitle']))
+            story.append(Paragraph(ai_interpretations['soft_skills'], styles['Body']))
+        
         story.append(Spacer(1, 8*mm))
         
         # === 3. ТЕСТ HEXACO - ЛИЧНОСТНЫЕ ЧЕРТЫ ===
         story.append(Paragraph("3. ТЕСТ HEXACO - МОДЕЛЬ ЛИЧНОСТИ", styles['SectionTitle']))
-        story.append(Spacer(1, 5*mm))
+        
+        # Описание теста в красной рамке (как на скриншоте)
+        test_description = "HEXACO - современная шестифакторная модель личности (10 вопросов по 5-балльной шкале)."
+        story.append(Paragraph(test_description, styles['Body']))
+        story.append(Spacer(1, 3*mm))
         
         hexaco_description = """
         <b>HEXACO</b> - современная шестифакторная модель личности, включающая основные измерения:<br/>
@@ -345,7 +499,11 @@ class EnhancedPDFReportV2:
         
         # === 4. ТЕСТ DISC - ПОВЕДЕНЧЕСКИЕ СТИЛИ ===
         story.append(Paragraph("4. ТЕСТ DISC - МОДЕЛЬ ПОВЕДЕНИЯ", styles['SectionTitle']))
-        story.append(Spacer(1, 5*mm))
+        
+        # Описание теста в красной рамке (как на скриншоте)
+        test_description = "DISC - методика оценки поведенческих особенностей и стилей (8 вопросов по 4 типам)."
+        story.append(Paragraph(test_description, styles['Body']))
+        story.append(Spacer(1, 3*mm))
         
         disc_description = """
         <b>DISC</b> - методика оценки поведенческих особенностей и стилей общения:<br/>
