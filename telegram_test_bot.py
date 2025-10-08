@@ -43,33 +43,45 @@ def generate_interpretations_from_prompt(paei_scores, disc_scores, hexaco_scores
     weak_paei = [paei_roles[role] for role, score in paei_scores.items() if score < 6]
     weak_skills = [skill for skill, score in soft_skills_scores.items() if score < 8.0]
     
-    # Формируем интерпретации согласно новому формату из general_system_res.txt
+    # Парсим подробную интерпретацию по PAEI из adizes_system_res.txt
+    def extract_paei_interpretation(dominant_role):
+        file_path = Path('data/prompts/adizes_system_res.txt')
+        if not file_path.exists():
+            return f"[Файл интерпретаций {file_path} не найден]"
+        with open(file_path, 'r', encoding='utf-8') as f:
+            text = f.read()
+        # Карта поиска по ключевым словам
+        role_map = {
+            'P': 'Производитель',
+            'A': 'Администратор',
+            'E': 'Предприниматель',
+            'I': 'Интегратор',
+        }
+        import re
+        # 1. Пробуем найти доминирующий стиль
+        pattern = rf"### \*\*1\. Доминирующий стиль — {dominant_role} \({role_map[dominant_role]}\):(.+?)(?=###|$)"
+        match = re.search(pattern, text, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        # 2. Пробуем найти слабую выраженность для этого стиля
+        pattern_weak = rf"### \*\*3\. Слабая выраженность стилей.*{role_map[dominant_role]}.*?:(.+?)(?=###|$)"
+        match_weak = re.search(pattern_weak, text, re.DOTALL)
+        if match_weak:
+            return match_weak.group(1).strip()
+        # 3. Фоллбек: ищем по названию роли
+        pattern2 = rf"{role_map[dominant_role]}[\s\S]{{0,1000}}?(?=###|$)"
+        match2 = re.search(pattern2, text, re.DOTALL)
+        if match2:
+            return match2.group(0).strip()
+        return f"[Подробная интерпретация для {role_map[dominant_role]} не найдена]"
+
+    paei_interpretation = extract_paei_interpretation(paei_max)
+
     return {
-        'paei': f'''Преобладающий профиль {dominant_paei_role} ({paei_scores[paei_max]} баллов) указывает на ориентацию на результат и эффективность в работе.
-
-РЕКОМЕНДАЦИИ ПО ПРОФЕССИОНАЛЬНОМУ РАЗВИТИЮ:
-
-1. Использование сильных сторон:
-    • (PAEI): Делегировать задачи, соответствующие профилю {dominant_paei_role}
-    • (Soft Skills): Развивать {soft_max} через специализированные проекты
-    • (DISC): Использовать {dominant_disc_style} в командном взаимодействии
-
-2. Области для развития:
-    • (PAEI): Работать над менее выраженными управленческими ролями {', '.join(weak_paei) if weak_paei else 'Администратор'}
-    • (Soft Skills): Развивать дополнительные soft skills для универсальности {weak_skills} [поиск курсов в Google]
-    • (DISC): Балансировать поведенческий стиль в зависимости от ситуации
-
-3. Карьерные перспективы:
-    • (PAEI): Рассмотреть позиции, требующие качеств {paei_genitive[dominant_paei_role]}
-    • (HEXACO): Планировать развитие с учетом личностного профиля HEXACO
-    • (DISC): Выстраивать команду с учетом комплементарных ролей по DISC''',
-        
+        'paei': paei_interpretation,
         'soft_skills': f'Наиболее развитый навык {soft_max} ({soft_skills_scores[soft_max]} баллов) является сильной стороной для профессионального развития.',
-        
         'hexaco': f'Профиль характеризуется сбалансированным развитием личностных качеств с акцентом на определенные аспекты поведения.',
-        
         'disc': f'Поведенческий стиль {dominant_disc_style} ({disc_scores[disc_max]} баллов) определяет подход к решению задач и взаимодействию в команде.',
-        
         'general': '''Общий портрет личности:
 Этот человек демонстрирует комплексный профиль с выраженными сильными сторонами и областями для развития. Рекомендации сформированы с учетом современных методик психологической оценки и включают конкретные направления для профессионального роста согласно формату general_system_res.txt.'''
     }
@@ -224,18 +236,18 @@ def parse_soft_skills_questions(filepath="data/prompts/soft_user.txt"):
     collecting_answers = False
     answers = []
     
-    # Mapping навыков на номера вопросов
+    # Новый mapping навыков на номера вопросов (уникальные soft skills)
     skills_mapping = {
         1: "Коммуникация",
-        2: "Лидерство", 
+        2: "Работа в команде",
         3: "Лидерство",
-        4: "Аналитика",
-        5: "Планирование",
+        4: "Критическое мышление",
+        5: "Управление временем",
         6: "Стрессоустойчивость",
-        7: "Стрессоустойчивость",
+        7: "Эмоциональный интеллект",
         8: "Адаптивность",
-        9: "Командная работа",
-        10: "Творчество"
+        9: "Решение проблем",
+        10: "Креативность"
     }
     
     for i, line in enumerate(lines):
@@ -457,23 +469,15 @@ async def handle_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     user_sessions[user_id].name = name
     user_sessions[user_id].phone = ""  # Пустой телефон по умолчанию
 
-    keyboard = [
-        ["🎯 Начать тестирование"]
-    ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-
     await update.message.reply_text(
-        f"👋 Приветствую, <b>{name}</b>!\n\n"
-        f"🎯 Готовы начать психологическое тестирование командных навыков?\n\n"
+        f"👋 Приветствую, <b>{name}</b>! Сейчас начнём тестирование.\n\n"
         f"Вас ждут три теста:\n"
         f"📊 <b>PAEI</b> - управленческие роли\n" 
         f"🎭 <b>DISC</b> - поведенческий стиль\n"
-        f"🧠 <b>HEXACO & Soft Skills</b> - личностные качества\n\n"
-        f"Вопрос 1 из {len(PAEI_QUESTIONS)}:",
+        f"🧠 <b>HEXACO & Soft Skills</b> - личностные качества\n",
         parse_mode='HTML',
-        reply_markup=reply_markup
+        reply_markup=ReplyKeyboardRemove()
     )
-
     return await start_paei_test(update, context)
 
 async def start_paei_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -571,15 +575,13 @@ async def ask_disc_question(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     
     logger.info(f"❓ Отправляем DISC вопрос {session.current_question + 1}/{len(DISC_QUESTIONS)}")
     
+    # Удаляем устаревшую инструкцию для DISC
     await update.message.reply_text(
-        f"🎭 <b>DISC - Вопрос {session.current_question + 1}/{len(DISC_QUESTIONS)}</b>\n\n"
-        f"📊 <b>Категория:</b> {question_data['category_name']} ({question_data['category']})\n\n"
-        f"<i>{question_data['question']}</i>\n\n"
-        f"Оцените по шкале от 1 до 5:",
+        f"💼 <b>DISC - Вопрос {session.current_question + 1}/{len(DISC_QUESTIONS)}</b>\n\n"
+        f"{question_data['question']}",
         parse_mode='HTML',
         reply_markup=reply_markup
     )
-    
     return DISC_TESTING
 
 async def handle_disc_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -639,16 +641,9 @@ async def start_hexaco_test(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     
     await update.message.reply_text(
         "🧠 <b>Начинаем тест HEXACO</b>\n\n"
-        "Сейчас вам будут предложены утверждения.\n"
-        "Оцените каждое по шкале от 1 до 5:\n"
-        "1 - Совершенно не согласен\n"
-        "2 - Скорее не согласен\n"
-        "3 - Нейтрально\n"
-        "4 - Скорее согласен\n"
-        "5 - Полностью согласен",
+        "Выберите наиболее предпочтительный для вас ответ:",
         parse_mode='HTML'
     )
-    
     logger.info(f"📝 Переходим к первому вопросу HEXACO")
     return await ask_hexaco_question(update, context)
 
@@ -716,10 +711,7 @@ async def start_soft_skills_test(update: Update, context: ContextTypes.DEFAULT_T
     
     await update.message.reply_text(
         "💪 <b>Начинаем тест Soft Skills</b>\n\n"
-        "Оцените свои навыки по шкале от 1 до 10:\n"
-        "1 - Очень слабо развит\n"
-        "5 - Средне развит\n"
-        "10 - Отлично развит",
+        "Выберите наиболее предпочтительный для вас ответ:",
         parse_mode='HTML'
     )
     
@@ -874,8 +866,13 @@ async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 parse_mode='HTML'
             )
         
-        # Удаляем временный файл
-        os.unlink(pdf_path)
+        # Удаляем временный файл безопасно
+        import os
+        if os.path.exists(pdf_path):
+            try:
+                os.unlink(pdf_path)
+            except Exception as del_err:
+                logger.warning(f"⚠️ Не удалось удалить временный PDF-файл {pdf_path}: {del_err}")
         
         # Отправляем ссылку на Google Drive если доступна
         if gdrive_link:
@@ -886,7 +883,6 @@ async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 parse_mode='HTML',
                 disable_web_page_preview=True
             )
-        
         await update.message.reply_text(
             "✅ <b>Готово!</b>\n\n"
             "📄 Ваш отчет отправлен выше.\n"
@@ -894,18 +890,15 @@ async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             "Спасибо за прохождение тестирования! 🎯",
             parse_mode='HTML'
         )
-        
     except Exception as e:
         logger.error(f"Ошибка генерации отчета: {e}")
         await update.message.reply_text(
             "❌ Произошла ошибка при генерации отчета.\n"
             "Попробуйте еще раз или обратитесь в поддержку."
         )
-    
     # Очищаем сессию
     if user_id in user_sessions:
         del user_sessions[user_id]
-    
     return ConversationHandler.END
 
 async def generate_user_report(session: UserSession) -> str:
@@ -966,54 +959,35 @@ async def generate_user_report(session: UserSession) -> str:
     logger.info(f"  {hexaco_method}")
     logger.info(f"  {soft_skills_method}")
     
-    # Генерируем отчет с автоматической загрузкой в Google Drive
-    result = pdf_generator.generate_enhanced_report_with_gdrive(
-        participant_name=session.name,
-        test_date=datetime.now().strftime("%Y-%m-%d"),
-        paei_scores=paei_normalized,
-        disc_scores=disc_normalized,
-        hexaco_scores=hexaco_normalized,
-        soft_skills_scores=soft_skills_normalized,
-        ai_interpretations=interpretations,
-        out_path=pdf_path,
-        upload_to_gdrive=True
-    )
-    
-    # Проверяем результат Google Drive загрузки
-    gdrive_link = None
-    if result and len(result) == 2:
-        local_path, gdrive_link = result
-        logger.info(f"📁 Отчет сохранен: {pdf_path.name}")
-        if gdrive_link:
-            logger.info(f"☁️ Google Drive: {gdrive_link}")
+    try:
+        # Генерируем отчет с автоматической загрузкой в Google Drive
+        result = pdf_generator.generate_enhanced_report_with_gdrive(
+            participant_name=session.name,
+            test_date=datetime.now().strftime("%Y-%m-%d"),
+            paei_scores=paei_normalized,
+            disc_scores=disc_normalized,
+            hexaco_scores=hexaco_normalized,
+            soft_skills_scores=soft_skills_normalized,
+            ai_interpretations=interpretations,
+            out_path=pdf_path,
+            upload_to_gdrive=True
+        )
+        # Проверяем результат Google Drive загрузки
+        gdrive_link = None
+        if result and len(result) == 2:
+            local_path, gdrive_link = result
+            logger.info(f"📁 Отчет сохранен: {pdf_path.name}")
+            if gdrive_link:
+                logger.info(f"☁️ Google Drive: {gdrive_link}")
+            else:
+                logger.info("⚠️ Google Drive загрузка не удалась")
         else:
-            logger.info("⚠️ Google Drive загрузка не удалась")
-    else:
-        logger.info(f"📁 Отчет сохранен: {pdf_path.name}")
-        logger.warning("⚠️ Проблема с Google Drive интеграцией")
-    # try:
-    #     user_info = {
-    #         "telegram_id": session.user_id,
-    #         "name": session.name if session.name else "TelegramUser"
-    #     }
-    #     
-    #     # Определяем доминирующий тест для имени файла (используем нормализованные значения)
-    #     max_paei = max(paei_normalized.values()) if paei_normalized else 0
-    #     max_disc = max(disc_normalized.values()) if disc_normalized else 0
-    #     
-    #     if max_paei >= max_disc:
-    #         test_type = f"PAEI_{max(paei_normalized, key=paei_normalized.get)}"
-    #     else:
-    #         test_type = f"DISC_{max(disc_normalized, key=disc_normalized.get)}"
-    #     
-    #     archived_path = save_report_copy(pdf_path, test_type, user_info)
-    #     if archived_path:
-    #         logger.info(f"📁 Отчет архивирован: {archived_path.name}")
-    #     
-    # except Exception as e:
-    #     logger.warning(f"⚠️ Не удалось архивировать отчет: {e}")
-    
-    return str(pdf_path), gdrive_link
+            logger.info(f"📁 Отчет сохранен: {pdf_path.name}")
+            logger.warning("⚠️ Проблема с Google Drive интеграцией")
+        return str(pdf_path), gdrive_link
+    except Exception as e:
+        logger.error(f"Ошибка генерации отчета: {e}")
+        return None, None
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Отмена тестирования"""
