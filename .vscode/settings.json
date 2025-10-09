@@ -1,0 +1,37 @@
+{
+  // путь к интерпретатору виртуального окружения проекта
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+
+  // автоматическая активация venv в терминале
+  "python.terminal.activateEnvironment": true,
+
+  // автоформатирование при сохранении
+  "editor.formatOnSave": true,
+
+  // автоисправление и сортировка импортов
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "always",
+    "source.organizeImports": "always"
+  },
+
+  // анализ типов и автодополнение
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.diagnosticMode": "workspace",
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.inlayHints.functionReturnTypes": true,
+
+  // включить pytest
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": ["tests"],
+
+  // линтер Ruff
+  "ruff.enable": true,
+  "ruff.lint.args": ["--fix"],
+
+  // отображение ошибок/предупреждений
+  "problems.showCurrentInStatus": true,
+
+  // отключаем стартовые окна
+  "workbench.startupEditor": "none",
+  "workbench.editor.empty.hint": "hidden"
+}

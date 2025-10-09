@@ -1,0 +1,211 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "pytest: Run All Tests",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "-m",
+                "pytest",
+                "-v"
+            ],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "new"
+            },
+            "problemMatcher": "$python",
+            "detail": "Запускает все тесты с помощью pytest"
+        },
+        {
+            "label": "pytest: Run Current File",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "-m",
+                "pytest",
+                "${file}",
+                "-v"
+            ],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "new"
+            },
+            "problemMatcher": "$python",
+            "detail": "Запускает тесты только для текущего файла"
+        },
+        {
+            "label": "ruff: Check Code",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "-m",
+                "ruff",
+                "check",
+                "."
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "new"
+            },
+            "problemMatcher": {
+                "pattern": [
+                    {
+                        "regexp": "^(.*):(\\d+):(\\d+):\\s+([^\\s]+)\\s+(.*)$",
+                        "file": 1,
+                        "line": 2,
+                        "column": 3,
+                        "severity": 4,
+                        "message": 5
+                    }
+                ]
+            },
+            "detail": "Проверяет код с помощью ruff"
+        },
+        {
+            "label": "ruff: Fix Code",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "-m",
+                "ruff",
+                "check",
+                "--fix",
+                "."
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "new"
+            },
+            "detail": "Автоматически исправляет ошибки с помощью ruff"
+        },
+        {
+            "label": "black: Format Code",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "-m",
+                "black",
+                "."
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "new"
+            },
+            "detail": "Форматирует код с помощью black"
+        },
+        {
+            "label": "black: Check Format",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "-m",
+                "black",
+                "--check",
+                "."
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "new"
+            },
+            "detail": "Проверяет форматирование с помощью black без изменений"
+        },
+        {
+            "label": "mypy: Type Check",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "-m",
+                "mypy",
+                "."
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "new"
+            },
+            "problemMatcher": {
+                "pattern": [
+                    {
+                        "regexp": "^(.*):(\\d+):\\s+(error|warning|note):\\s+(.*)$",
+                        "file": 1,
+                        "line": 2,
+                        "severity": 3,
+                        "message": 4
+                    }
+                ]
+            },
+            "detail": "Проверяет типы с помощью mypy"
+        },
+        {
+            "label": "Run Telegram Bot",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "telegram_test_bot.py"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "new"
+            },
+            "isBackground": true,
+            "problemMatcher": "$python",
+            "detail": "Запускает Telegram бота"
+        },
+        {
+            "label": "Install Dependencies",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "-m",
+                "pip",
+                "install",
+                "-r",
+                "requirements.txt"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "new"
+            },
+            "detail": "Устанавливает зависимости из requirements.txt"
+        },
+        {
+            "label": "Code Quality: Full Check",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "ruff: Check Code",
+                "black: Check Format",
+                "mypy: Type Check",
+                "pytest: Run All Tests"
+            ],
+            "group": "test",
+            "detail": "Полная проверка качества кода: ruff + black + mypy + pytest"
+        }
+    ]
+}
