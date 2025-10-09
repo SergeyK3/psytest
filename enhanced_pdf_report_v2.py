@@ -6,25 +6,19 @@
 """
 
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional, Tuple
 from io import BytesIO
 from copy import deepcopy
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm, cm
-from reportlab.pdfgen import canvas
-from reportlab.lib.colors import Color, black, white
+from reportlab.lib.units import mm
+from reportlab.lib.colors import Color
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.platypus import PageBreak, KeepTogether, Image
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Image
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import os
-from datetime import datetime
 import sys
-from pathlib import Path
-from telegram_test_bot import generate_interpretations_from_prompt
+from interpretation_utils import generate_interpretations_from_prompt
 
 # Добавляем путь к модулям проекта
 sys.path.append(str(Path(__file__).parent / "src"))
@@ -35,7 +29,6 @@ try:
 except ImportError:
     AI_AVAILABLE = False
     print("⚠️ AI интерпретатор недоступен - будут использованы статические интерпретации")
-import numpy as np
 
 from src.psytest.charts import make_radar, make_bar_chart, make_paei_combined_chart, make_disc_combined_chart, make_hexaco_radar
 
@@ -62,10 +55,10 @@ class DesignConfig:
     PAEI_COMBINED_WIDTH = 180  # специальный размер для комбинированной диаграммы PAEI
     PAEI_COMBINED_HEIGHT = 90  # высота комбинированной диаграммы
     
-    # Шрифты (используем встроенные Unicode шрифты)
-    TITLE_FONT = "Times-Bold"
-    BODY_FONT = "Times-Roman"
-    SMALL_FONT = "Times-Roman"
+    # Шрифты (используем встроенные Unicode шрифты) - изменяемые атрибуты
+    TITLE_FONT: str = "Times-Bold"
+    BODY_FONT: str = "Times-Roman"
+    SMALL_FONT: str = "Times-Roman"
     
     TITLE_SIZE = 14
     BODY_SIZE = 11  # было 10, увеличено для лучшей читаемости
@@ -169,30 +162,73 @@ class EnhancedPDFReportV2:
             DesignConfig.SMALL_FONT = "Times-Roman"
             print("📝 Используются встроенные шрифты Times")
     
-    def _add_chart_to_story(self, story, chart_path: Path, width: int = None, height: int = None):
+    def _add_chart_to_story(
+        self,
+        story,
+        chart_path: Path,
+        styles,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+    ):
         """Добавляет диаграмму в документ с оптимизированными размерами"""
         if chart_path.exists():
             try:
                 # Специальные размеры для комбинированных диаграмм
                 if "paei_combined" in str(chart_path) or "disc_combined" in str(chart_path):
-                    width = DesignConfig.PAEI_COMBINED_WIDTH
-                    height = DesignConfig.PAEI_COMBINED_HEIGHT
+                    chart_width = DesignConfig.PAEI_COMBINED_WIDTH
+                    chart_height = DesignConfig.PAEI_COMBINED_HEIGHT
                 # Используем стандартные размеры если не указаны явно
                 elif width is None:
-                    width = DesignConfig.RADAR_SIZE
+                    chart_width = DesignConfig.RADAR_SIZE
                     if height is None:
-                        height = DesignConfig.RADAR_SIZE
+                        chart_height = DesignConfig.RADAR_SIZE
+                    else:
+                        chart_height = height
+                else:
+                    chart_width = width
+                    chart_height = height or DesignConfig.RADAR_SIZE
                     
                 # Конвертируем размеры в миллиметры
-                img = Image(str(chart_path), width=width*mm, height=height*mm)
+                img = Image(str(chart_path), width=chart_width*mm, height=chart_height*mm)
                 img.hAlign = 'CENTER'
                 story.append(img)
                 story.append(Spacer(1, 3*mm))  # уменьшен с 5мм до 3мм
             except Exception as e:
                 print(f"⚠️  Ошибка при добавлении диаграммы {chart_path}: {e}")
                 # Добавляем плейсхолдер
-                story.append(Paragraph(f"[Диаграмма: {chart_path.name}]", self._get_custom_styles()['Body']))
+                story.append(Paragraph(f"[Диаграмма: {chart_path.name}]", styles['Body']))
                 story.append(Spacer(1, 3*mm))  # уменьшен с 5мм до 3мм
+
+    def _create_doc_template(self, target) -> SimpleDocTemplate:
+        """Создаёт настроенный шаблон документа для ReportLab."""
+        return SimpleDocTemplate(
+            target,
+            pagesize=A4,
+            rightMargin=DesignConfig.MARGIN * mm,
+            leftMargin=DesignConfig.MARGIN * mm,
+            topMargin=DesignConfig.MARGIN * mm,
+            bottomMargin=DesignConfig.MARGIN * mm,
+        )
+
+    def _count_story_pages(self, story) -> int:
+        """Подсчитывает итоговое количество страниц, не записывая файл на диск."""
+        temp_buffer = BytesIO()
+        temp_doc = self._create_doc_template(temp_buffer)
+        temp_doc.build(deepcopy(story))
+        return temp_doc.page
+
+    def _draw_page_number(self, canvas_obj, total_pages: int) -> None:
+        """Рисует нумерацию страниц в формате 'Стр. X из N'."""
+        canvas_obj.saveState()
+        canvas_obj.setFont(DesignConfig.BODY_FONT, 10)
+        page_num = canvas_obj.getPageNumber()
+        text = f"Стр. {page_num} из {total_pages}"
+        canvas_obj.drawRightString(
+            A4[0] - DesignConfig.MARGIN * mm,
+            A4[1] - DesignConfig.MARGIN * mm + 5,
+            text,
+        )
+        canvas_obj.restoreState()
     
     def _generate_dynamic_interpretations(self, paei_scores: Dict[str, float], 
                                         disc_scores: Dict[str, float],
@@ -265,64 +301,48 @@ class EnhancedPDFReportV2:
         """Форматирует результаты в детальную строку"""
         return "\n".join([f"• {k}: {v} баллов" for k, v in scores.items()])
 
-    def generate_enhanced_report(self, 
-                               participant_name: str,
-                               test_date: str,
-                               paei_scores: Dict[str, float],
-                               disc_scores: Dict[str, float], 
-                               hexaco_scores: Dict[str, float],
-                               soft_skills_scores: Dict[str, float],
-                               ai_interpretations: Dict[str, str],
-                               out_path: Path) -> Path:
-        """Генерирует улучшенный PDF отчёт с детальными описаниями"""
-        
-        # Генерируем динамические интерпретации
-        dynamic_interpretations = self._generate_dynamic_interpretations(
-            paei_scores, disc_scores, hexaco_scores, soft_skills_scores
-        )
-        
-        # Используем динамические интерпретации вместо переданных
-        ai_interpretations = dynamic_interpretations
-        
-        # Создание PDF документа
-        doc = SimpleDocTemplate(str(out_path), pagesize=A4,
-                              rightMargin=DesignConfig.MARGIN*mm,
-                              leftMargin=DesignConfig.MARGIN*mm,
-                              topMargin=DesignConfig.MARGIN*mm,
-                              bottomMargin=DesignConfig.MARGIN*mm)
-        
-        # Создание всех диаграмм (радарные для всех тестов)
-        chart_paths = self._create_all_charts(paei_scores, disc_scores, hexaco_scores, soft_skills_scores)
-        
-        # Стили
+    def _build_story(
+        self,
+        participant_name: str,
+        test_date: str,
+        paei_scores: Dict[str, float],
+        disc_scores: Dict[str, float],
+        hexaco_scores: Dict[str, float],
+        soft_skills_scores: Dict[str, float],
+        ai_interpretations: Dict[str, str],
+        chart_paths: Dict[str, Path],
+    ):
+        """Формирует последовательность элементов отчёта (story)."""
         styles = self._get_custom_styles()
         story = []
-        
+
         # === ЗАГОЛОВОК ДОКУМЕНТА ===
         story.append(Paragraph("ОЦЕНКА КОМАНДНЫХ НАВЫКОВ", styles['MainTitle']))
-        story.append(Spacer(1, 1*mm))
+        story.append(Spacer(1, 1 * mm))
+
         # === ИМЯ УЧАСТНИКА (ПО ЦЕНТРУ, уменьшенный шрифт) ===
         if participant_name.strip():
             story.append(Paragraph(participant_name, styles['ParticipantName']))
-            story.append(Spacer(1, 1*mm))
+            story.append(Spacer(1, 1 * mm))
+
         # === ДАТА ТЕСТИРОВАНИЯ ===
         date_text = f"Дата тестирования: {test_date}"
         story.append(Paragraph(date_text, styles['Body']))
-        story.append(Spacer(1, 2*mm))
-        
+        story.append(Spacer(1, 2 * mm))
+
         # === ОБЩЕЕ ЗАКЛЮЧЕНИЕ И РЕКОМЕНДАЦИИ ===
         story.append(Paragraph("ОБЩЕЕ ЗАКЛЮЧЕНИЕ И РЕКОМЕНДАЦИИ", styles['SectionTitle']))
-        story.append(Spacer(1, 2*mm))
-        
+        story.append(Spacer(1, 2 * mm))
+
         # Определяем доминирующие черты для заключения
-        max_paei = max(paei_scores, key=paei_scores.get)
-        max_disc = max(disc_scores, key=disc_scores.get)
-        max_hexaco = max(hexaco_scores, key=hexaco_scores.get)
-        max_soft = max(soft_skills_scores, key=soft_skills_scores.get)
-        
+        max_paei = max(paei_scores, key=lambda k: paei_scores[k])
+        max_disc = max(disc_scores, key=lambda k: disc_scores[k])
+        max_hexaco = max(hexaco_scores, key=lambda k: hexaco_scores[k])
+        max_soft = max(soft_skills_scores, key=lambda k: soft_skills_scores[k])
+
         paei_names = {"P": "Производитель", "A": "Администратор", "E": "Предприниматель", "I": "Интегратор"}
         disc_names = {"D": "Доминирование", "I": "Влияние", "S": "Постоянство", "C": "Соответствие"}
-        
+
         # Синтез результатов
         synthesis_text = f"""
         На основе комплексного психологического тестирования сотрудника <b>{participant_name}</b> 
@@ -331,95 +351,84 @@ class EnhancedPDFReportV2:
         о профессиональном профиле и потенциале развития.
         """
         story.append(Paragraph(synthesis_text, styles['Body']))
-        story.append(Spacer(1, 3*mm))  # уменьшен отступ с 5мм до 3мм
-        
+        story.append(Spacer(1, 3 * mm))  # уменьшен отступ с 5мм до 3мм
+
         # Сводка по ключевым характеристикам и методикам
         story.append(Paragraph("<b>Ключевые характеристики профиля и использованные методики:</b>", styles['SubTitle']))
-        
+
         # Результаты тестирования с детальным описанием методик
-        # Многострочный список с выравниванием по bullet
         story.append(Paragraph("<b>Результаты тестирования:</b>", styles['Body']))
         bullet_items = [
             f"<b>Тест Адизеса (PAEI)</b> - оценка управленческих ролей и стилей руководства (5 вопросов по 4 типам). Преобладает роль {paei_names.get(max_paei, max_paei)} - {paei_scores[max_paei]} баллов",
             f"<b>Оценка Soft Skills</b> - анализ надпрофессиональных компетенций (10 вопросов по 10-балльной шкале). Наиболее развитый навык: {max_soft} - {soft_skills_scores[max_soft]} баллов",
             f"<b>HEXACO</b> - современная шестифакторная модель личности (10 вопросов по 5-балльной шкале). Выраженная личностная черта: {max_hexaco} ({hexaco_scores[max_hexaco]} баллов)",
-            f"<b>DISC</b> - методика оценки поведенческих особенностей и стилей (8 вопросов по 4 типам). {disc_names.get(max_disc, max_disc)} ({disc_scores[max_disc]} баллов)"
+            f"<b>DISC</b> - методика оценки поведенческих особенностей и стилей (8 вопросов по 4 типам). {disc_names.get(max_disc, max_disc)} ({disc_scores[max_disc]} баллов)",
         ]
         for item in bullet_items:
             story.append(Paragraph(item, style=styles['ListWithIndent'], bulletText='•'))
-        story.append(Spacer(1, 2*mm))
-        
-        
+        story.append(Spacer(1, 2 * mm))
+
         # Профессиональные рекомендации
         story.append(Paragraph("<b>Рекомендации по профессиональному развитию:</b>", styles['SubTitle']))
-        
+
         # 1. Использование сильных сторон
         story.append(Paragraph("<b>1. Использование сильных сторон:</b>", styles['Body']))
         story.append(Paragraph(f"• (PAEI): Делегировать задачи, соответствующие профилю {paei_names.get(max_paei, max_paei)}", styles['ListWithIndent']))
         story.append(Paragraph(f"• (Soft Skills): Развивать {max_soft.lower()} через специализированные проекты", styles['ListWithIndent']))
-        story.append(Paragraph(f"• (DISC): Использовать {disc_names.get(max_disc, max_disc).lower()} в командном взаимодействии", styles['ListWithIndent']))
-        story.append(Spacer(1, 2*mm))
-        
-        # 2. Области для развития  
+        story.append(Paragraph(f"• (DISC): Использовать {disc_names.get(max_disc, max_disc)} в командном взаимодействии", styles['ListWithIndent']))
+        story.append(Spacer(1, 2 * mm))
+
+        # 2. Области для развития
         story.append(Paragraph("<b>2. Области для развития:</b>", styles['Body']))
         story.append(Paragraph("• (PAEI): Работать над менее выраженными управленческими ролями", styles['ListWithIndent']))
         story.append(Paragraph("• (Soft Skills): Развивать дополнительные soft skills для универсальности [поиск курсов в Google]", styles['ListWithIndent']))
         story.append(Paragraph("• (DISC): Балансировать поведенческий стиль в зависимости от ситуации", styles['ListWithIndent']))
-        story.append(Spacer(1, 2*mm))
-        
+        story.append(Spacer(1, 2 * mm))
+
         # 3. Карьерные перспективы
         story.append(Paragraph("<b>3. Карьерные перспективы:</b>", styles['Body']))
         story.append(Paragraph(f"• (PAEI): Рассмотреть позиции, требующие качеств {paei_names.get(max_paei, max_paei)}", styles['ListWithIndent']))
         story.append(Paragraph("• (HEXACO): Планировать развитие с учетом личностного профиля HEXACO", styles['ListWithIndent']))
         story.append(Paragraph("• (DISC): Выстраивать команду с учетом комплементарных ролей по DISC", styles['ListWithIndent']))
-        story.append(Spacer(1, 6*mm))  # уменьшен отступ с 10мм до 6мм
-        
+        story.append(Spacer(1, 6 * mm))  # уменьшен отступ с 10мм до 6мм
+
         # Переход к детальным разделам
         story.append(PageBreak())
-        
+
         # === 1. ТЕСТ АДИЗЕСА (PAEI) ===
         story.append(Paragraph("1. ТЕСТ АДИЗЕСА (PAEI) - УПРАВЛЕНЧЕСКИЕ РОЛИ", styles['SectionTitle']))
-        
-        # Описание теста в красной рамке (как на скриншоте)
+
         test_description = "Тест Адизеса (PAEI) - оценка управленческих ролей и стилей руководства (5 вопросов по 4 типам)."
         story.append(Paragraph(test_description, styles['Body']))
-        story.append(Spacer(1, 3*mm))
-        
-        # Расшифровка PAEI
+        story.append(Spacer(1, 3 * mm))
+
         story.append(Paragraph("<b>Расшифровка PAEI:</b>", styles['Body']))
         paei_bullets = [
             f"<b>P (Producer - Производитель)</b> - ориентация на результат, выполнение задач, достижение целей: {paei_scores.get('P', '')} баллов",
             f"<b>A (Administrator - Администратор)</b> - организация процессов, контроль, систематизация работы: {paei_scores.get('A', '')} баллов.",
             f"<b>E (Entrepreneur - Предприниматель)</b> - инновации, стратегическое мышление, креативность: {paei_scores.get('E', '')} баллов.",
-            f"<b>I (Integrator - Интегратор)</b> - командная работа, мотивация людей, создание единства: {paei_scores.get('I', '')} баллов."
+            f"<b>I (Integrator - Интегратор)</b> - командная работа, мотивация людей, создание единства: {paei_scores.get('I', '')} баллов.",
         ]
         for item in paei_bullets:
             story.append(Paragraph(item, style=styles['ListWithIndent'], bulletText='•'))
-        story.append(Spacer(1, 5*mm))
-        
-        # Результаты PAEI
-    # (Строка с результатами теперь внутри последнего пункта списка)
-        
-        # Встраиваем диаграмму PAEI
+        story.append(Spacer(1, 5 * mm))
+
         if 'paei' in chart_paths:
-            self._add_chart_to_story(story, chart_paths['paei'])
-        
-        # Интерпретация PAEI
+            self._add_chart_to_story(story, chart_paths['paei'], styles)
+
         if 'paei' in ai_interpretations:
             story.append(Paragraph("<b>Интерпретация:</b>", styles['SubTitle']))
-            # Заменяем \n на <br/> для корректного многострочного вывода
             paei_text = ai_interpretations['paei'].replace('\n', '<br/>')
             story.append(Paragraph(paei_text, styles['Body']))
-        story.append(Spacer(1, 6*mm))  # уменьшен отступ с 8мм до 6мм
-        
+        story.append(Spacer(1, 6 * mm))
+
         # === 2. SOFT SKILLS - МЯГКИЕ НАВЫКИ ===
         story.append(Paragraph("2. SOFT SKILLS - ОЦЕНКА МЯГКИХ НАВЫКОВ", styles['SectionTitle']))
-        
-        # Описание теста в красной рамке (как на скриншоте)
+
         test_description = "Оценка Soft Skills - анализ надпрофессиональных компетенций (10 вопросов по 10-балльной шкале)."
         story.append(Paragraph(test_description, styles['Body']))
-        story.append(Spacer(1, 3*mm))
-        
+        story.append(Spacer(1, 3 * mm))
+
         soft_description = """
         <b>Soft Skills</b> - это надпрофессиональные навыки, которые помогают решать жизненные и рабочие задачи 
         независимо от специальности. Включают коммуникативные способности, лидерские качества, креативность, 
@@ -427,32 +436,28 @@ class EnhancedPDFReportV2:
         и способность к профессиональному росту в любой сфере деятельности.
         """
         story.append(Paragraph(soft_description, styles['Body']))
-        story.append(Spacer(1, 5*mm))
-        
-        # Результаты Soft Skills
+        story.append(Spacer(1, 5 * mm))
+
         soft_results = f"<b>Результаты:</b> {self._format_scores(soft_skills_scores)}"
         story.append(Paragraph(soft_results, styles['Body']))
-        story.append(Spacer(1, 3*mm))
-        
-        # Встраиваем диаграмму Soft Skills
+        story.append(Spacer(1, 3 * mm))
+
         if 'soft_skills' in chart_paths:
-            self._add_chart_to_story(story, chart_paths['soft_skills'])
-        
-        # Интерпретация Soft Skills (динамическая из промптов)
+            self._add_chart_to_story(story, chart_paths['soft_skills'], styles)
+
         if 'soft_skills' in ai_interpretations:
             story.append(Paragraph("<b>Интерпретация:</b>", styles['SubTitle']))
             story.append(Paragraph(ai_interpretations['soft_skills'], styles['Body']))
-        
-        story.append(Spacer(1, 4*mm))  # уменьшен с 8мм до 4мм
-        
+
+        story.append(Spacer(1, 4 * mm))
+
         # === 3. ТЕСТ HEXACO - ЛИЧНОСТНЫЕ ЧЕРТЫ ===
         story.append(Paragraph("3. ТЕСТ HEXACO - МОДЕЛЬ ЛИЧНОСТИ", styles['SectionTitle']))
-        
-        # Описание теста в красной рамке (как на скриншоте)
+
         test_description = "HEXACO - современная шестифакторная модель личности (10 вопросов по 5-балльной шкале)."
         story.append(Paragraph(test_description, styles['Body']))
-        story.append(Spacer(1, 3*mm))
-        
+        story.append(Spacer(1, 3 * mm))
+
         hexaco_description = """
         <b>HEXACO</b> - современная шестифакторная модель личности, включающая основные измерения:<br/>
         • <b>H (Honesty-Humility)</b> - честность, скромность, искренность в отношениях<br/>
@@ -463,31 +468,27 @@ class EnhancedPDFReportV2:
         • <b>O (Openness)</b> - открытость опыту, креативность, любознательность
         """
         story.append(Paragraph(hexaco_description, styles['Body']))
-        story.append(Spacer(1, 5*mm))
-        
-        # Результаты HEXACO
+        story.append(Spacer(1, 5 * mm))
+
         hexaco_results = f"<b>Результаты:</b> {self._format_scores(hexaco_scores)}"
         story.append(Paragraph(hexaco_results, styles['Body']))
-        story.append(Spacer(1, 3*mm))
-        
-        # Встраиваем диаграмму HEXACO
+        story.append(Spacer(1, 3 * mm))
+
         if 'hexaco' in chart_paths:
-            self._add_chart_to_story(story, chart_paths['hexaco'])
-        
-        # Интерпретация HEXACO
+            self._add_chart_to_story(story, chart_paths['hexaco'], styles)
+
         if 'hexaco' in ai_interpretations:
             story.append(Paragraph("<b>Интерпретация:</b>", styles['SubTitle']))
             story.append(Paragraph(ai_interpretations['hexaco'], styles['Body']))
-        story.append(Spacer(1, 4*mm))  # уменьшен с 8мм до 4мм
-        
+        story.append(Spacer(1, 4 * mm))
+
         # === 4. ТЕСТ DISC - ПОВЕДЕНЧЕСКИЕ СТИЛИ ===
         story.append(Paragraph("4. ТЕСТ DISC - МОДЕЛЬ ПОВЕДЕНИЯ", styles['SectionTitle']))
-        
-        # Описание теста в красной рамке (как на скриншоте)
+
         test_description = "DISC - методика оценки поведенческих особенностей и стилей (8 вопросов по 4 типам)."
         story.append(Paragraph(test_description, styles['Body']))
-        story.append(Spacer(1, 3*mm))
-        
+        story.append(Spacer(1, 3 * mm))
+
         disc_description = """
         <b>DISC</b> - методика оценки поведенческих особенностей и стилей общения:<br/>
         • <b>D (Dominance)</b> - доминирование, прямота, решительность, ориентация на результат<br/>
@@ -496,84 +497,67 @@ class EnhancedPDFReportV2:
         • <b>C (Compliance)</b> - соответствие стандартам, аналитичность, точность, осторожность
         """
         story.append(Paragraph(disc_description, styles['Body']))
-        story.append(Spacer(1, 5*mm))
-        
-        # Результаты DISC
+        story.append(Spacer(1, 5 * mm))
+
         disc_results = f"<b>Результаты:</b> {self._format_scores(disc_scores)}"
         story.append(Paragraph(disc_results, styles['Body']))
-        story.append(Spacer(1, 3*mm))
-        
-        # Встраиваем диаграмму DISC
+        story.append(Spacer(1, 3 * mm))
+
         if 'disc' in chart_paths:
-            self._add_chart_to_story(story, chart_paths['disc'])
-        
-        # Интерпретация DISC
+            self._add_chart_to_story(story, chart_paths['disc'], styles)
+
         if 'disc' in ai_interpretations:
             story.append(Paragraph("<b>Интерпретация:</b>", styles['SubTitle']))
             story.append(Paragraph(ai_interpretations['disc'], styles['Body']))
-        story.append(Spacer(1, 4*mm))  # уменьшен с 8мм до 4мм
-        
-        # === ПЕРЕХОД НА НОВУЮ СТРАНИЦУ ===
-        
-        # Сборка PDF с нумерацией страниц в верхнем правом углу
-        # Двухэтапный процесс: сначала определяем общее количество страниц, потом генерируем с нумерацией
-        
-        # Этап 1: Предварительная сборка для подсчета страниц (без нумерации)
-        temp_buffer = BytesIO()
-        temp_doc = SimpleDocTemplate(temp_buffer, pagesize=A4, 
-                                   rightMargin=DesignConfig.MARGIN*mm, 
-                                   leftMargin=DesignConfig.MARGIN*mm,
-                                   topMargin=DesignConfig.MARGIN*mm, 
-                                   bottomMargin=DesignConfig.MARGIN*mm)
-        
-        # Создаем новые экземпляры элементов для предварительной сборки
-        from copy import deepcopy
-        temp_story = deepcopy(story)
-        temp_doc.build(temp_story)
-        total_pages = temp_doc.page
-        
-        # Этап 2: Финальная сборка с правильной нумерацией
-        def add_page_number_with_total(canvas, doc):
-            """Добавляет номер страницы в верхний правый угол в формате 'Стр. X из N'"""
-            canvas.saveState()
-            canvas.setFont('Arial-Regular', 10)
-            page_num = canvas.getPageNumber()
-            text = f"Стр. {page_num} из {total_pages}"
-            # Позиция в верхнем правом углу (отступ 20мм от краев)
-            canvas.drawRightString(A4[0] - DesignConfig.MARGIN*mm, 
-                                 A4[1] - DesignConfig.MARGIN*mm + 5, 
-                                 text)
-            canvas.restoreState()
-        
-        doc.build(story, onFirstPage=add_page_number_with_total, onLaterPages=add_page_number_with_total)
-        
-        # СОХРАНЕНИЕ ТОЛЬКО В GOOGLE DRIVE (БЕЗ ЛОКАЛЬНЫХ КОПИЙ)
-        print("📤 Сохранение PDF только в Google Drive...")
-        try:
-            from oauth_google_drive import upload_to_google_drive_oauth
-            import os
-            
-            drive_link = upload_to_google_drive_oauth(str(out_path), "PsychTest Reports")
-            if drive_link:
-                print(f"✅ PDF сохранен в Google Drive!")
-                print(f"🔗 Ссылка: {drive_link}")
-                
-                # Удаляем локальный файл после успешной загрузки
-                try:
-                    os.remove(str(out_path))
-                    print(f"🗑️ Локальный файл удален: {out_path.name}")
-                except Exception as e:
-                    print(f"⚠️ Не удалось удалить локальный файл: {e}")
-                
-                # Возвращаем ссылку на Google Drive вместо локального пути
-                return drive_link
-            else:
-                print("❌ Ошибка загрузки в Google Drive - файл остается локально")
-                return out_path
-        except Exception as e:
-            print(f"❌ Ошибка загрузки в Google Drive: {e}")
-            print("📄 Файл сохранен локально")
-            return out_path
+        story.append(Spacer(1, 4 * mm))
+
+        return story
+
+    def generate_enhanced_report(self, 
+                               participant_name: str,
+                               test_date: str,
+                               paei_scores: Dict[str, float],
+                               disc_scores: Dict[str, float], 
+                               hexaco_scores: Dict[str, float],
+                               soft_skills_scores: Dict[str, float],
+                               ai_interpretations: Optional[Dict[str, str]],
+                               out_path: Path) -> Tuple[Path, Optional[str]]:
+        """Генерирует улучшенный PDF отчёт с детальными описаниями"""
+        prepared_interpretations = dict(ai_interpretations or {})
+        expected_keys = {'paei', 'disc', 'hexaco', 'soft_skills'}
+        missing_keys = expected_keys - set(prepared_interpretations)
+        if missing_keys:
+            generated = self._generate_dynamic_interpretations(
+                paei_scores, disc_scores, hexaco_scores, soft_skills_scores
+            )
+            prepared_interpretations = {**generated, **prepared_interpretations}
+
+        chart_paths = self._create_all_charts(
+            paei_scores,
+            disc_scores,
+            hexaco_scores,
+            soft_skills_scores,
+        )
+
+        story = self._build_story(
+            participant_name,
+            test_date,
+            paei_scores,
+            disc_scores,
+            hexaco_scores,
+            soft_skills_scores,
+            prepared_interpretations,
+            chart_paths,
+        )
+
+        total_pages = self._count_story_pages(story)
+        doc = self._create_doc_template(str(out_path))
+
+        def _draw_page(canvas_obj, _doc):
+            self._draw_page_number(canvas_obj, total_pages)
+
+        doc.build(story, onFirstPage=_draw_page, onLaterPages=_draw_page)
+        return out_path, None
     
     def _create_all_charts(self, paei_scores: Dict, disc_scores: Dict, 
                          hexaco_scores: Dict, soft_skills_scores: Dict) -> Dict[str, Path]:
@@ -704,7 +688,7 @@ class EnhancedPDFReportV2:
         """Форматирует результаты в читаемую строку"""
         return ", ".join([f"{k}: {v}" for k, v in scores.items()])
     
-    def upload_to_google_drive(self, file_path: Path, participant_name: str = None) -> Optional[str]:
+    def upload_to_google_drive(self, file_path: Path, participant_name: Optional[str] = None) -> Optional[str]:
         """
         Загрузка PDF в Google Drive (интеграция с oauth_google_drive.py)
         
@@ -759,14 +743,17 @@ class EnhancedPDFReportV2:
             Tuple[Path, Optional[str]]: путь к файлу и ссылка на Google Drive (если загружен)
         """
         # Генерируем обычный отчет
-        pdf_path = self.generate_enhanced_report(
+        pdf_result = self.generate_enhanced_report(
             participant_name, test_date, paei_scores, disc_scores,
             hexaco_scores, soft_skills_scores, ai_interpretations, out_path
         )
         
-        # Загружаем в Google Drive если нужно
-        gdrive_link = None
-        if upload_to_gdrive:
+        # Распаковываем результат
+        pdf_path, existing_gdrive_link = pdf_result
+        
+        # Загружаем в Google Drive если нужно и еще не загружен
+        gdrive_link = existing_gdrive_link
+        if upload_to_gdrive and not existing_gdrive_link:
             gdrive_link = self.upload_to_google_drive(pdf_path, participant_name)
         
         return pdf_path, gdrive_link
