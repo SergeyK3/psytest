@@ -19,6 +19,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 import os
 import sys
 from interpretation_utils import generate_interpretations_from_prompt
+from questions_answers_section import QuestionAnswerSection
 
 # Добавляем путь к модулям проекта
 sys.path.append(str(Path(__file__).parent / "src"))
@@ -102,9 +103,11 @@ class EnhancedCharts:
 class EnhancedPDFReportV2:
     """Класс для создания улучшенных PDF отчётов версии 2.0"""
     
-    def __init__(self, template_dir: Optional[Path] = None):
+    def __init__(self, template_dir: Optional[Path] = None, include_questions_section: bool = False):
         self.template_dir = template_dir or Path.cwd() / "temp_charts"
         self.template_dir.mkdir(exist_ok=True)
+        self.include_questions_section = include_questions_section
+        self.qa_section = QuestionAnswerSection() if include_questions_section else None
         self._setup_fonts()
         
     def _setup_fonts(self):
@@ -311,6 +314,7 @@ class EnhancedPDFReportV2:
         soft_skills_scores: Dict[str, float],
         ai_interpretations: Dict[str, str],
         chart_paths: Dict[str, Path],
+        user_answers: Optional[Dict] = None,
     ):
         """Формирует последовательность элементов отчёта (story)."""
         styles = self._get_custom_styles()
@@ -511,6 +515,24 @@ class EnhancedPDFReportV2:
             story.append(Paragraph(ai_interpretations['disc'], styles['Body']))
         story.append(Spacer(1, 4 * mm))
 
+        # === РАЗДЕЛ С ДЕТАЛИЗАЦИЕЙ ВОПРОСОВ И ОТВЕТОВ (ОПЦИОНАЛЬНЫЙ) ===
+        if self.include_questions_section and self.qa_section and user_answers:
+            story.append(PageBreak())
+            
+            # Добавляем раздел с детализацией вопросов и ответов
+            questions_section_elements = self.qa_section.generate_complete_questions_section(
+                paei_answers=user_answers.get('paei', {}),
+                soft_skills_answers=user_answers.get('soft_skills', {}),
+                hexaco_answers=user_answers.get('hexaco', {}),
+                disc_answers=user_answers.get('disc', {}),
+                paei_scores=paei_scores,
+                soft_skills_scores=soft_skills_scores,
+                hexaco_scores=hexaco_scores,
+                disc_scores=disc_scores,
+                styles=styles
+            )
+            story.extend(questions_section_elements)
+
         return story
 
     def generate_enhanced_report(self, 
@@ -521,7 +543,8 @@ class EnhancedPDFReportV2:
                                hexaco_scores: Dict[str, float],
                                soft_skills_scores: Dict[str, float],
                                ai_interpretations: Optional[Dict[str, str]],
-                               out_path: Path) -> Tuple[Path, Optional[str]]:
+                               out_path: Path,
+                               user_answers: Optional[Dict] = None) -> Tuple[Path, Optional[str]]:
         """Генерирует улучшенный PDF отчёт с детальными описаниями"""
         prepared_interpretations = dict(ai_interpretations or {})
         expected_keys = {'paei', 'disc', 'hexaco', 'soft_skills'}
@@ -548,6 +571,7 @@ class EnhancedPDFReportV2:
             soft_skills_scores,
             prepared_interpretations,
             chart_paths,
+            user_answers,
         )
 
         total_pages = self._count_story_pages(story)
@@ -735,7 +759,8 @@ class EnhancedPDFReportV2:
                                            soft_skills_scores: Dict[str, float],
                                            ai_interpretations: Dict[str, str],
                                            out_path: Path,
-                                           upload_to_gdrive: bool = True) -> Tuple[Path, Optional[str]]:
+                                           upload_to_gdrive: bool = True,
+                                           user_answers: Optional[Dict] = None) -> Tuple[Path, Optional[str]]:
         """
         Генерирует PDF отчёт и загружает в Google Drive
         
@@ -745,7 +770,7 @@ class EnhancedPDFReportV2:
         # Генерируем обычный отчет
         pdf_result = self.generate_enhanced_report(
             participant_name, test_date, paei_scores, disc_scores,
-            hexaco_scores, soft_skills_scores, ai_interpretations, out_path
+            hexaco_scores, soft_skills_scores, ai_interpretations, out_path, user_answers
         )
         
         # Распаковываем результат
