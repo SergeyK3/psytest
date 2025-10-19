@@ -23,10 +23,11 @@ class ScaleNormalizer:
     
     @staticmethod 
     def normalize_paei(scores: Dict[str, float]) -> Tuple[Dict[str, float], str]:
-        """Возвращает PAEI баллы без нормализации (шкала 0-5)"""
-        # Возвращаем оригинальные значения, округленные до 1 знака
-        original_scores = {k: round(v, 1) for k, v in scores.items()}
-        method = "PAEI: оригинальная шкала 0-5 (без нормализации)"
+        """Возвращает PAEI баллы без нормализации (оригинальная методика Адизеса)"""
+        # Возвращаем оригинальные значения - по методике Адизеса это правильно
+        # 1 балл за каждый выбранный ответ, сумма = количество вопросов
+        original_scores = {k: int(v) for k, v in scores.items()}  # Целые числа
+        method = "PAEI: оригинальная методика Адизеса (1 балл за ответ, сумма = кол-во вопросов)"
         return original_scores, method
     
     @staticmethod

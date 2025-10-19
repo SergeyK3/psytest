@@ -795,15 +795,10 @@ async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     )
     
     try:
-        # Преобразуем счетчики в осмысленные баллы 1-10
-        # PAEI: конвертируем счетчики в баллы на основе доминирующих ролей
-        total_paei = sum(session.paei_scores.values()) or 1
-        session.paei_scores = {
-            "P": round(1 + (session.paei_scores["P"] / total_paei) * 9, 1),
-            "A": round(1 + (session.paei_scores["A"] / total_paei) * 9, 1), 
-            "E": round(1 + (session.paei_scores["E"] / total_paei) * 9, 1),
-            "I": round(1 + (session.paei_scores["I"] / total_paei) * 9, 1)
-        }
+        # Обработка результатов по методикам
+        # PAEI: сохраняем оригинальные баллы согласно методике Адизеса
+        # (1 балл за каждый выбранный ответ, сумма = количество вопросов)
+        # session.paei_scores остается без изменений - это правильно!
         
         # DISC: конвертируем счетчики в баллы на основе доминирующих стилей
         total_disc = sum(session.disc_scores.values()) or 1
