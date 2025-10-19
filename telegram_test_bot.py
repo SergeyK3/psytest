@@ -839,28 +839,30 @@ async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             # Если данных недостаточно, используем средние значения
             session.soft_skills_scores = {skill: 5.0 for skill in soft_skills_names}
         
-        # Генерируем PDF отчет с Google Drive интеграцией в отдельном потоке
-        pdf_path = await asyncio.to_thread(generate_user_report, session)
+        # Генерируем два PDF отчета в отдельном потоке
+        pdf_path_user, pdf_path_gdrive = await asyncio.to_thread(generate_user_report, session)
         
-        # Отправляем PDF пользователю
-        with open(pdf_path, 'rb') as pdf_file:
+        # Отправляем пользователю ТОЛЬКО его отчет (без детализации вопросов)
+        with open(pdf_path_user, 'rb') as pdf_file:
             await update.message.reply_document(
                 document=pdf_file,
                 filename=f"Отчет_{session.name.replace(' ', '_')}.pdf",
                 caption=f"📊 <b>Ваш персональный отчет готов!</b>\n\n"
                        f"👤 {session.name}\n"
                        f"📅 {datetime.now().strftime('%d.%m.%Y %H:%M')}\n\n"
-                       f"📋 Отчет содержит детальный анализ по всем методикам.",
+                       f"📋 Отчет содержит детальный анализ по всем методикам.\n"
+                       f"🔒 Полная версия с детализацией вопросов сохранена для специалиста.",
                 parse_mode='HTML'
             )
         
-        # Удаляем временный файл безопасно
+        # Удаляем временные файлы безопасно
         import os
-        if os.path.exists(pdf_path):
-            try:
-                os.unlink(pdf_path)
-            except Exception as del_err:
-                logger.warning(f"⚠️ Не удалось удалить временный PDF-файл {pdf_path}: {del_err}")
+        for pdf_path in [pdf_path_user, pdf_path_gdrive]:
+            if os.path.exists(pdf_path):
+                try:
+                    os.unlink(pdf_path)
+                except Exception as del_err:
+                    logger.warning(f"⚠️ Не удалось удалить временный PDF-файл {pdf_path}: {del_err}")
         # Отправляем уведомление о завершении
         await update.message.reply_text(
             "✅ <b>Готово!</b>\n\n"
@@ -880,8 +882,8 @@ async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         del user_sessions[user_id]
     return ConversationHandler.END
 
-def generate_user_report(session: UserSession) -> str:
-    """Генерирует PDF отчет для пользователя"""
+def generate_user_report(session: UserSession) -> tuple[str, str]:
+    """Генерирует два PDF отчета: один для пользователя (без вопросов), другой для Google Drive (с вопросами)"""
     
     # Создаем временную папку для диаграмм
     temp_dir = tempfile.mkdtemp()
@@ -889,13 +891,19 @@ def generate_user_report(session: UserSession) -> str:
     temp_charts_dir.mkdir(exist_ok=True)
     
     try:
-        # Определяем, включать ли раздел вопросов (можно управлять через переменную окружения)
-        include_questions = os.getenv('INCLUDE_QUESTIONS_SECTION', 'false').lower() == 'true'
+        # Всегда собираем ответы пользователя для отчета в Google Drive
+        user_answers = session.answers_collector.get_answers_dict()
         
-        # Инициализируем генератор PDF с опциональным разделом вопросов
-        pdf_generator = EnhancedPDFReportV2(
+        # Инициализируем генератор PDF БЕЗ раздела вопросов для пользователя
+        pdf_generator_user = EnhancedPDFReportV2(
             template_dir=temp_charts_dir,
-            include_questions_section=include_questions
+            include_questions_section=False  # Пользователю отчет без вопросов
+        )
+        
+        # Инициализируем генератор PDF С разделом вопросов для Google Drive
+        pdf_generator_gdrive = EnhancedPDFReportV2(
+            template_dir=temp_charts_dir,
+            include_questions_section=True   # В Google Drive отчет с вопросами
         )
     
         # Инициализируем AI интерпретатор
@@ -925,13 +933,16 @@ def generate_user_report(session: UserSession) -> str:
                 session.hexaco_scores, session.soft_skills_scores
             )
         
-        # Путь для сохранения PDF в папку docs/
+        # Создаем папки для сохранения PDF
         docs_dir = Path("docs")
         docs_dir.mkdir(exist_ok=True)
         
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        filename = f"{timestamp}_{session.name.replace(' ', '_') if session.name else 'TelegramUser'}_tg_{str(session.user_id)[-4:]}.pdf"
-        pdf_path = docs_dir / filename
+        base_filename = f"{timestamp}_{session.name.replace(' ', '_') if session.name else 'TelegramUser'}_tg_{str(session.user_id)[-4:]}"
+        
+        # Пути для двух отчетов
+        pdf_path_user = docs_dir / f"{base_filename}_user.pdf"      # Для пользователя (без вопросов)
+        pdf_path_gdrive = docs_dir / f"{base_filename}_full.pdf"    # Для Google Drive (с вопросами)
         
         # Нормализуем баллы к единой шкале 0-10
         paei_normalized, paei_method = ScaleNormalizer.auto_normalize("PAEI", session.paei_scores)
@@ -945,36 +956,53 @@ def generate_user_report(session: UserSession) -> str:
         logger.info(f"  {hexaco_method}")
         logger.info(f"  {soft_skills_method}")
         
-        # Получаем собранные ответы пользователя (если включен раздел вопросов)
-        user_answers = session.answers_collector.get_answers_dict() if include_questions else None
+        test_date = datetime.now().strftime("%Y-%m-%d %H:%M")
         
-        # Генерируем отчет с автоматической загрузкой в Google Drive
-        result = pdf_generator.generate_enhanced_report_with_gdrive(
+        # 1. Генерируем отчет БЕЗ вопросов для пользователя
+        logger.info("📄 Генерируем отчет для пользователя (без детализации вопросов)...")
+        pdf_generator_user.generate_enhanced_report(
             participant_name=session.name,
-            test_date=datetime.now().strftime("%Y-%m-%d %H:%M"),
+            test_date=test_date,
             paei_scores=paei_normalized,
             disc_scores=disc_normalized,
             hexaco_scores=hexaco_normalized,
             soft_skills_scores=soft_skills_normalized,
             ai_interpretations=interpretations,
-            out_path=pdf_path,
+            out_path=pdf_path_user,
+            user_answers=None  # Не передаем ответы для пользовательского отчета
+        )
+        
+        # 2. Генерируем отчет С вопросами для Google Drive
+        logger.info("📄 Генерируем полный отчет для Google Drive (с детализацией вопросов)...")
+        result = pdf_generator_gdrive.generate_enhanced_report_with_gdrive(
+            participant_name=session.name,
+            test_date=test_date,
+            paei_scores=paei_normalized,
+            disc_scores=disc_normalized,
+            hexaco_scores=hexaco_normalized,
+            soft_skills_scores=soft_skills_normalized,
+            ai_interpretations=interpretations,
+            out_path=pdf_path_gdrive,
             upload_to_gdrive=True,
-            user_answers=user_answers  # 🔑 Передаем собранные ответы
+            user_answers=user_answers  # 🔑 Передаем собранные ответы для полного отчета
         )
         
         # Проверяем результат Google Drive загрузки
         if result and len(result) == 2:
             local_path, gdrive_link = result
-            logger.info(f"📁 Отчет сохранен: {pdf_path.name}")
+            logger.info(f"📁 Пользовательский отчет: {pdf_path_user.name}")
+            logger.info(f"📁 Полный отчет сохранен: {pdf_path_gdrive.name}")
             if gdrive_link:
                 logger.info(f"☁️ Google Drive: {gdrive_link}")
             else:
                 logger.info("⚠️ Google Drive загрузка не удалась")
-            return str(pdf_path)
         else:
-            logger.info(f"📁 Отчет сохранен: {pdf_path.name}")
+            logger.info(f"📁 Пользовательский отчет: {pdf_path_user.name}")
+            logger.info(f"📁 Полный отчет сохранен: {pdf_path_gdrive.name}")
             logger.warning("⚠️ Проблема с Google Drive интеграцией")
-            return str(pdf_path)
+        
+        # Возвращаем пути к обоим отчетам
+        return str(pdf_path_user), str(pdf_path_gdrive)
             
     except Exception as e:
         logger.error(f"Ошибка генерации отчета: {e}")
