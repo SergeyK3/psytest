@@ -158,7 +158,7 @@ def simulate_user_session_with_questions():
         # Генерируем отчет
         report_generator.generate_enhanced_report(
             participant_name="Симуляция Telegram Бота",
-            test_date=datetime.now().strftime("%d.%m.%Y"),
+            test_date=datetime.now().strftime("%d.%m.%Y %H:%M"),
             paei_scores=paei_scores,
             disc_scores=disc_scores,
             hexaco_scores=hexaco_scores,
@@ -261,7 +261,7 @@ async def generate_final_report(user_session):
     # Генерируем отчет
     report_path, gdrive_link = report_generator.generate_enhanced_report_with_gdrive(
         participant_name=user_session.name,
-        test_date=datetime.now().strftime("%d.%m.%Y"),
+        test_date=datetime.now().strftime("%d.%m.%Y %H:%M"),
         paei_scores=calculate_paei_scores(user_session),
         disc_scores=calculate_disc_scores(user_session),
         hexaco_scores=calculate_hexaco_scores(user_session),

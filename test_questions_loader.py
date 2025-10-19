@@ -44,11 +44,11 @@ def parse_adizes_questions(filepath="data/prompts/adizes_user.txt"):
                     "answers": answers
                 })
         
-        print(f"📊 Загружено {len(questions)} PAEI вопросов из {filepath}")
+        print(f"Загружено {len(questions)} PAEI вопросов из {filepath}")
         return questions
         
     except Exception as e:
-        print(f"❌ Ошибка при загрузке PAEI вопросов: {e}")
+        print(f"Ошибка при загрузке PAEI вопросов: {e}")
         return []
 
 
@@ -76,11 +76,11 @@ def parse_disc_questions(filepath="data/prompts/disc_user.txt"):
                     "scale": "1-5"
                 })
         
-        print(f"📊 Загружено {len(questions)} DISC вопросов из {filepath}")
+        print(f"Загружено {len(questions)} DISC вопросов из {filepath}")
         return questions
         
     except Exception as e:
-        print(f"❌ Ошибка при загрузке DISC вопросов: {e}")
+        print(f"Ошибка при загрузке DISC вопросов: {e}")
         return []
 
 
@@ -191,14 +191,14 @@ def parse_soft_skills_questions(filepath="data/prompts/soft_user.txt"):
             })
         
         if questions:
-            print(f"📊 Загружено {len(questions)} Soft Skills вопросов из {filepath}")
+            print(f"Загружено {len(questions)} Soft Skills вопросов из {filepath}")
         else:
-            print(f"❌ Не удалось загрузить Soft Skills вопросы из {filepath}")
+            print(f"Не удалось загрузить Soft Skills вопросы из {filepath}")
         
         return questions
         
     except Exception as e:
-        print(f"❌ Ошибка при загрузке Soft Skills вопросов: {e}")
+        print(f"Ошибка при загрузке Soft Skills вопросов: {e}")
         return []
 
 
@@ -224,10 +224,10 @@ if __name__ == "__main__":
     
     all_questions = get_all_questions()
     
-    print(f"\n📊 Результаты загрузки:")
+    print(f"\nРезультаты загрузки:")
     print(f"  - PAEI: {len(all_questions['paei'])} вопросов")
     print(f"  - DISC: {len(all_questions['disc'])} вопросов")
     print(f"  - HEXACO: {len(all_questions['hexaco'])} вопросов")
     print(f"  - Soft Skills: {len(all_questions['soft_skills'])} вопросов")
     
-    print(f"\n✅ Модуль test_questions_loader.py готов к использованию!")
+    print(f"\nМодуль test_questions_loader.py готов к использованию!")

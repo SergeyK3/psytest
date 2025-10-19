@@ -29,7 +29,7 @@ try:
     AI_AVAILABLE = True
 except ImportError:
     AI_AVAILABLE = False
-    print("⚠️ AI интерпретатор недоступен - будут использованы статические интерпретации")
+    print("AI интерпретатор недоступен - будут использованы статические интерпретации")
 
 from src.psytest.charts import make_radar, make_bar_chart, make_paei_combined_chart, make_disc_combined_chart, make_hexaco_radar
 
@@ -133,37 +133,37 @@ class EnhancedPDFReportV2:
                     try:
                         pdfmetrics.registerFont(TTFont(font_name, font_path))
                         fonts_registered[font_name] = True
-                        print(f"✅ Зарегистрирован шрифт: {font_name}")
+                        print(f"Зарегистрирован шрифт: {font_name}")
                     except Exception as e:
-                        print(f"⚠️  Ошибка регистрации {font_name}: {e}")
+                        print(f"Ошибка регистрации {font_name}: {e}")
             
             # Устанавливаем шрифты в зависимости от того, что удалось зарегистрировать
             if "Arial-Regular" in fonts_registered:
                 DesignConfig.BODY_FONT = "Arial-Regular"
                 DesignConfig.SMALL_FONT = "Arial-Regular"
-                print("📝 Используется Arial для основного текста")
+                print("Используется Arial для основного текста")
             else:
                 DesignConfig.BODY_FONT = "Times-Roman"
                 DesignConfig.SMALL_FONT = "Times-Roman"
-                print("📝 Используется Times-Roman для основного текста")
+                print("Используется Times-Roman для основного текста")
             
             if "Arial-Bold" in fonts_registered:
                 DesignConfig.TITLE_FONT = "Arial-Bold"
-                print("📝 Используется Arial-Bold для заголовков")
+                print("Используется Arial-Bold для заголовков")
             elif "Times-Bold" in fonts_registered:
                 DesignConfig.TITLE_FONT = "Times-Bold"
-                print("📝 Используется Times-Bold для заголовков")
+                print("Используется Times-Bold для заголовков")
             else:
                 DesignConfig.TITLE_FONT = "Times-Bold"
-                print("📝 Используется встроенный Times-Bold для заголовков")
+                print("Используется встроенный Times-Bold для заголовков")
                 
         except Exception as e:
-            print(f"⚠️  Ошибка настройки шрифтов: {e}")
+            print(f"Ошибка настройки шрифтов: {e}")
             # В случае ошибки используем встроенные шрифты
             DesignConfig.TITLE_FONT = "Times-Bold"
             DesignConfig.BODY_FONT = "Times-Roman"
             DesignConfig.SMALL_FONT = "Times-Roman"
-            print("📝 Используются встроенные шрифты Times")
+            print("Используются встроенные шрифты Times")
     
     def _add_chart_to_story(
         self,
@@ -197,7 +197,7 @@ class EnhancedPDFReportV2:
                 story.append(img)
                 story.append(Spacer(1, 3*mm))  # уменьшен с 5мм до 3мм
             except Exception as e:
-                print(f"⚠️  Ошибка при добавлении диаграммы {chart_path}: {e}")
+                print(f"Ошибка при добавлении диаграммы {chart_path}: {e}")
                 # Добавляем плейсхолдер
                 story.append(Paragraph(f"[Диаграмма: {chart_path.name}]", styles['Body']))
                 story.append(Spacer(1, 3*mm))  # уменьшен с 5мм до 3мм
@@ -253,7 +253,7 @@ class EnhancedPDFReportV2:
                 # Создаем AI интерпретатор
                 ai = get_ai_interpreter()
                 if ai:
-                    print("🤖 Генерируем динамические интерпретации с помощью AI...")
+                    print("[AI] Генерируем динамические интерпретации с помощью AI...")
                     
                     # PAEI интерпретация с промптом adizes_system_res.txt
                     # Явно требуем развернутую интерпретацию в стиле психологического портрета
@@ -276,21 +276,21 @@ class EnhancedPDFReportV2:
                     # DISC интерпретация с промптом disk_system_res.txt
                     interpretations['disc'] = ai.interpret_disc(disc_scores)
                     
-                    print("✅ Динамические интерпретации сгенерированы успешно")
+                    print("Динамические интерпретации сгенерированы успешно")
                     return interpretations
                     
             except Exception as e:
-                print(f"⚠️ Ошибка AI интерпретации: {e}")
+                print(f"Ошибка AI интерпретации: {e}")
         
-        print("📝 Используем статические интерпретации через generate_interpretations_from_prompt...")
+        print("Используем статические интерпретации через generate_interpretations_from_prompt...")
         try:
             interpretations = generate_interpretations_from_prompt(
                 paei_scores, disc_scores, hexaco_scores, soft_skills_scores
             )
-            print("✅ Статические интерпретации сгенерированы успешно через generate_interpretations_from_prompt")
+            print("Статические интерпретации сгенерированы успешно через generate_interpretations_from_prompt")
             return interpretations
         except Exception as e:
-            print(f"⚠️ Ошибка статической интерпретации: {e}")
+            print(f"Ошибка статической интерпретации: {e}")
             # Если всё совсем плохо — возвращаем пустые строки
             interpretations = {
                 'paei': '',
@@ -726,7 +726,7 @@ class EnhancedPDFReportV2:
         try:
             from oauth_google_drive import upload_to_google_drive_oauth
             
-            print(f"📤 Загрузка PDF отчета в Google Drive: {participant_name or 'неизвестный пользователь'}")
+            print(f"[UPLOAD] Загрузка PDF отчета в Google Drive: {participant_name or 'неизвестный пользователь'}")
             
             # Загружаем с месячной структурой папок: PsychTest Reports/2025/10-October
             web_link = upload_to_google_drive_oauth(
@@ -736,18 +736,18 @@ class EnhancedPDFReportV2:
             )
             
             if web_link:
-                print(f"🎉 PDF успешно загружен в Google Drive!")
-                print(f"🔗 Ссылка для просмотра: {web_link}")
+                print(f"PDF успешно загружен в Google Drive!")
+                print(f"[LINK] Ссылка для просмотра: {web_link}")
                 return web_link
             else:
-                print("❌ Не удалось загрузить PDF в Google Drive")
+                print("Не удалось загрузить PDF в Google Drive")
                 return None
                 
         except ImportError:
-            print("⚠️ Google Drive интеграция недоступна (отсутствует oauth_google_drive)")
+            print("Google Drive интеграция недоступна (отсутствует oauth_google_drive)")
             return None
         except Exception as e:
-            print(f"❌ Ошибка загрузки в Google Drive: {e}")
+            print(f"Ошибка загрузки в Google Drive: {e}")
             return None
     
     def generate_enhanced_report_with_gdrive(self, 
