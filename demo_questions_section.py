@@ -33,9 +33,9 @@ def demonstrate_questions_section():
     standard_report_path = Path("demo_report_standard.pdf")
     
     try:
-        report_generator_standard.generate_enhanced_report(
+        report_generator_standard.generate_enhanced_report_with_gdrive(
             participant_name="Иванов Иван Иванович (Стандартный отчет)",
-            test_date=datetime.now().strftime("%d.%m.%Y"),
+            test_date=datetime.now().strftime("%d.%m.%Y %H:%M"),
             paei_scores=sample_data['paei_scores'],
             disc_scores=sample_data['disc_scores'],
             hexaco_scores=sample_data['hexaco_scores'],
@@ -46,7 +46,8 @@ def demonstrate_questions_section():
                 'hexaco': 'Образец интерпретации HEXACO для демонстрации.',
                 'disc': 'Образец интерпретации DISC для демонстрации.'
             },
-            out_path=standard_report_path
+            out_path=standard_report_path,
+            upload_to_gdrive=True  # ✅ Загружаем в Google Drive
         )
         print(f"✅ Стандартный отчет создан: {standard_report_path}")
         
@@ -65,9 +66,9 @@ def demonstrate_questions_section():
     extended_report_path = Path("demo_report_with_questions.pdf")
     
     try:
-        report_generator_extended.generate_enhanced_report(
+        report_generator_extended.generate_enhanced_report_with_gdrive(
             participant_name="Петрова Анна Сергеевна (Расширенный отчет)",
-            test_date=datetime.now().strftime("%d.%m.%Y"),
+            test_date=datetime.now().strftime("%d.%m.%Y %H:%M"),
             paei_scores=sample_data['paei_scores'],
             disc_scores=sample_data['disc_scores'],
             hexaco_scores=sample_data['hexaco_scores'],
@@ -79,6 +80,7 @@ def demonstrate_questions_section():
                 'disc': 'Анализ поведенческих особенностей и стилей коммуникации.'
             },
             out_path=extended_report_path,
+            upload_to_gdrive=True,  # ✅ Загружаем в Google Drive
             user_answers={  # 🔑 КЛЮЧЕВОЙ ПАРАМЕТР - ответы пользователя
                 'paei': sample_data['paei_answers'],
                 'soft_skills': sample_data['soft_skills_answers'],

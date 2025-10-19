@@ -31,6 +31,7 @@ from interpretation_utils import generate_interpretations_from_prompt
 from src.psytest.ai_interpreter import get_ai_interpreter
 from report_archiver import save_report_copy
 from scale_normalizer import ScaleNormalizer
+from bot_integration_example import UserAnswersCollector
 
 # === НАСТРОЙКИ ===
 # Загружаем токен бота из переменной окружения
@@ -65,6 +66,9 @@ class UserSession:
         self.current_test = ""
         self.current_question = 0
         self.started_at = datetime.now()
+        
+        # Новое: коллектор ответов для детального раздела в отчете
+        self.answers_collector = UserAnswersCollector()
 
 # === ФУНКЦИИ ПАРСИНГА ВОПРОСОВ ===
 
@@ -433,11 +437,7 @@ async def handle_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     user_sessions[user_id].phone = ""  # Пустой телефон по умолчанию
 
     await update.message.reply_text(
-        f"👋 Приветствую, <b>{name}</b>! Сейчас начнём тестирование.\n\n"
-        f"Вас ждут три теста:\n"
-        f"📊 <b>PAEI</b> - управленческие роли\n" 
-        f"🎭 <b>DISC</b> - поведенческий стиль\n"
-        f"🧠 <b>HEXACO & Soft Skills</b> - личностные качества\n",
+        f"👋 Приветствую, <b>{name}</b>! Сейчас начнём тестирование.\n",
         parse_mode='HTML',
         reply_markup=ReplyKeyboardRemove()
     )
@@ -488,7 +488,15 @@ async def handle_paei_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     answer_code = answer_text[0] if answer_text else ""
     
     if answer_code in ["P", "A", "E", "I"]:
+        # Обычная логика подсчета баллов
         session.paei_scores[answer_code] += 1
+        
+        # НОВОЕ: сохраняем детальный ответ для раздела вопросов
+        session.answers_collector.add_paei_answer(
+            question_index=session.current_question,
+            selected_option=answer_code
+        )
+        
         session.current_question += 1
         return await ask_paei_question(update, context)
     else:
@@ -574,8 +582,15 @@ async def handle_disc_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
         question_data = DISC_QUESTIONS[session.current_question]
         category = question_data['category']  # D, I, S, C
         
-        # Добавляем балл к соответствующей категории
+        # Обычная логика добавления баллов
         session.disc_scores[category] += score
+        
+        # НОВОЕ: сохраняем детальный ответ для раздела вопросов
+        session.answers_collector.add_disc_answer(
+            question_index=session.current_question,
+            rating=score
+        )
+        
         session.current_question += 1
         
         logger.info(f"✅ Ответ принят. Категория: {category}, Балл: {score}")
@@ -653,8 +668,14 @@ async def handle_hexaco_answer(update: Update, context: ContextTypes.DEFAULT_TYP
                 break
                 
         if score is not None:
-            # Сохраняем ответ в список (позже будем делать среднее)
+            # Обычная логика сохранения
             session.hexaco_scores.append(score)
+            
+            # НОВОЕ: сохраняем детальный ответ для раздела вопросов
+            session.answers_collector.add_hexaco_answer(
+                question_index=session.current_question,
+                rating=score
+            )
             
             session.current_question += 1
             return await ask_hexaco_question(update, context)
@@ -738,8 +759,14 @@ async def handle_soft_skills_answer(update: Update, context: ContextTypes.DEFAUL
         
         # Проверяем диапазон 1-5
         if score and 1 <= score <= 5:
-            # Сохраняем ответ в список
+            # Обычная логика сохранения
             session.soft_skills_scores.append(score)
+            
+            # НОВОЕ: сохраняем детальный ответ для раздела вопросов
+            session.answers_collector.add_soft_skills_answer(
+                question_index=session.current_question,
+                rating=score
+            )
             
             logger.info(f"📝 Soft Skills ответ от {user_id}: балл {score}")
             logger.info(f"📊 Текущий счет: {session.soft_skills_scores}")
@@ -862,8 +889,14 @@ def generate_user_report(session: UserSession) -> str:
     temp_charts_dir.mkdir(exist_ok=True)
     
     try:
-        # Инициализируем генератор PDF
-        pdf_generator = EnhancedPDFReportV2(template_dir=temp_charts_dir)
+        # Определяем, включать ли раздел вопросов (можно управлять через переменную окружения)
+        include_questions = os.getenv('INCLUDE_QUESTIONS_SECTION', 'false').lower() == 'true'
+        
+        # Инициализируем генератор PDF с опциональным разделом вопросов
+        pdf_generator = EnhancedPDFReportV2(
+            template_dir=temp_charts_dir,
+            include_questions_section=include_questions
+        )
     
         # Инициализируем AI интерпретатор
         ai_interpreter = get_ai_interpreter()
@@ -912,17 +945,21 @@ def generate_user_report(session: UserSession) -> str:
         logger.info(f"  {hexaco_method}")
         logger.info(f"  {soft_skills_method}")
         
+        # Получаем собранные ответы пользователя (если включен раздел вопросов)
+        user_answers = session.answers_collector.get_answers_dict() if include_questions else None
+        
         # Генерируем отчет с автоматической загрузкой в Google Drive
         result = pdf_generator.generate_enhanced_report_with_gdrive(
             participant_name=session.name,
-            test_date=datetime.now().strftime("%Y-%m-%d"),
+            test_date=datetime.now().strftime("%Y-%m-%d %H:%M"),
             paei_scores=paei_normalized,
             disc_scores=disc_normalized,
             hexaco_scores=hexaco_normalized,
             soft_skills_scores=soft_skills_normalized,
             ai_interpretations=interpretations,
             out_path=pdf_path,
-            upload_to_gdrive=True
+            upload_to_gdrive=True,
+            user_answers=user_answers  # 🔑 Передаем собранные ответы
         )
         
         # Проверяем результат Google Drive загрузки

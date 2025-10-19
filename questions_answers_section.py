@@ -418,10 +418,10 @@ if __name__ == "__main__":
     qa_section = QuestionAnswerSection()
     sample_data = create_sample_data_for_testing()
     
-    print("✅ Модуль questions_answers_section.py создан успешно!")
-    print(f"📊 Загружено вопросов:")
+    print("Модуль questions_answers_section.py создан успешно!")
+    print(f"Загружено вопросов:")
     print(f"  - PAEI: {len(qa_section.paei_questions)}")
     print(f"  - Soft Skills: {len(qa_section.soft_skills_questions)}")
     print(f"  - HEXACO: {len(qa_section.hexaco_questions)}")
     print(f"  - DISC: {len(qa_section.disc_questions)}")
-    print(f"\n🎯 Готов к интеграции с enhanced_pdf_report_v2.py")
+    print(f"\n[READY] Готов к интеграции с enhanced_pdf_report_v2.py")
