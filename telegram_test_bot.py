@@ -174,6 +174,33 @@ def parse_disc_questions(filepath="data/prompts/disc_user.txt"):
         logger.error(f"❌ Ошибка при загрузке DISC вопросов: {e}")
         return []
 
+def convert_disc_to_average(session):
+    """Конвертирует DISC баллы из суммы в среднее значение (1-5)"""
+    try:
+        # Подсчитываем количество вопросов по каждой категории
+        category_count = {"D": 0, "I": 0, "S": 0, "C": 0}
+        
+        for question in DISC_QUESTIONS:
+            if 'category' in question:
+                category = question['category']
+                if category in category_count:
+                    category_count[category] += 1
+        
+        # Конвертируем сумму в среднее значение
+        for category in ["D", "I", "S", "C"]:
+            if category_count[category] > 0:
+                # Среднее = сумма / количество вопросов
+                average = session.disc_scores[category] / category_count[category]
+                session.disc_scores[category] = round(average, 1)
+                logger.info(f"📊 {category}: {category_count[category]} вопросов → среднее {average:.1f}")
+            else:
+                logger.warning(f"⚠️ Нет вопросов для категории {category}")
+        
+        logger.info(f"✅ DISC конвертирован в среднее: {session.disc_scores}")
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка конвертации DISC: {e}")
+
 def parse_soft_skills_questions(filepath="data/prompts/soft_user.txt"):
     """Парсинг вопросов Soft Skills из файла промптов"""
     try:
@@ -527,6 +554,11 @@ async def ask_disc_question(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     logger.info(f"📋 ask_disc_question: current_question={session.current_question}, len={len(DISC_QUESTIONS)}")
     
     if session.current_question >= len(DISC_QUESTIONS):
+        logger.info(f"🎯 DISC завершен! Конвертируем баллы в среднее значение")
+        
+        # Конвертируем DISC баллы из суммы в среднее значение (1-5)
+        convert_disc_to_average(session)
+        
         logger.info(f"🎯 DISC завершен! Завершаем тестирование")
         return await complete_testing(update, context)
     
@@ -800,14 +832,9 @@ async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         # (1 балл за каждый выбранный ответ, сумма = количество вопросов)
         # session.paei_scores остается без изменений - это правильно!
         
-        # DISC: конвертируем счетчики в баллы на основе доминирующих стилей
-        total_disc = sum(session.disc_scores.values()) or 1
-        session.disc_scores = {
-            "D": round(1 + (session.disc_scores["D"] / total_disc) * 9, 1),
-            "I": round(1 + (session.disc_scores["I"] / total_disc) * 9, 1),
-            "S": round(1 + (session.disc_scores["S"] / total_disc) * 9, 1),
-            "C": round(1 + (session.disc_scores["C"] / total_disc) * 9, 1)
-        }
+        # DISC: оставляем сырые баллы (8 вопросов × шкала 1-5 = 8-40 баллов)
+        # Убираем нормализацию - пусть ScaleNormalizer обработает сырые данные
+        # session.disc_scores остается без изменений - это правильно!
         
         # HEXACO: преобразуем список ответов в средние баллы по измерениям
         # У нас 6 вопросов (по одному на каждое измерение HEXACO)
@@ -888,6 +915,11 @@ def generate_user_report(session: UserSession) -> tuple[str, str]:
     try:
         # Всегда собираем ответы пользователя для отчета в Google Drive
         user_answers = session.answers_collector.get_answers_dict()
+        
+        # 🔍 ОТЛАДКА: Логируем собранные ответы
+        logger.info(f"🔍 Собранные ответы пользователя:")
+        for test_type, answers in user_answers.items():
+            logger.info(f"  {test_type.upper()}: {len(answers)} ответов - {dict(list(answers.items())[:3])}{'...' if len(answers) > 3 else ''}")
         
         # Инициализируем генератор PDF БЕЗ раздела вопросов для пользователя
         pdf_generator_user = EnhancedPDFReportV2(

@@ -165,7 +165,7 @@ def make_radar(labels, values, out_path: Path, title: str = "", max_value: int =
     vals = list(display_values) + display_values[:1]
     
     # Создание фигуры
-    fig = plt.figure(figsize=(5, 5), facecolor=PRINT_COLORS['background'])
+    fig = plt.figure(figsize=(2, 2), facecolor=PRINT_COLORS['background'])
     ax = plt.subplot(111, polar=True)
     
     # Настройка полярных осей
@@ -174,7 +174,7 @@ def make_radar(labels, values, out_path: Path, title: str = "", max_value: int =
     
     # Установка меток осей
     ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(labels, fontsize=10, color=PRINT_COLORS['primary'])
+    ax.set_xticklabels(labels, fontsize=8, color=PRINT_COLORS['primary'])
     
     # Улучшенная радиальная сетка
     if actual_max <= 5:
@@ -204,7 +204,7 @@ def make_radar(labels, values, out_path: Path, title: str = "", max_value: int =
     
     # Заголовок
     if title:
-        plt.title(title, pad=25, fontsize=11, fontweight='bold', 
+        plt.title(title, pad=20, fontsize=9, fontweight='bold', 
                  color=PRINT_COLORS['primary'])
     
     # Сохранение
@@ -404,7 +404,7 @@ def make_pie_chart(labels, values, out_path: Path, title: str = "") -> Path:
 
 def make_paei_combined_chart(labels, values, out_path: Path, title: str = "") -> Path:
     """
-    Создает комбинированную диаграмму для PAEI - столбиковая слева, круговая справа
+    Создает круговую диаграмму для PAEI (убрана столбиковая)
     
     Args:
         labels: Названия категорий PAEI
@@ -430,52 +430,29 @@ def make_paei_combined_chart(labels, values, out_path: Path, title: str = "") ->
     russian_labels = [label_mapping.get(label, label) for label in labels]
     chart_colors = [colors.get(label, '#4F81BD') for label in labels]
     
-    # Настройка matplotlib для качественной печати на полную ширину
+    # Настройка matplotlib для качественной печати
     plt.rcParams.update({
         'font.size': 12,
         'font.family': 'sans-serif',
         'axes.linewidth': 1.2,
-        'figure.dpi': 150,  # увеличенный DPI для лучшего качества
+        'figure.dpi': 150,
         'savefig.dpi': 150,
         'savefig.bbox': 'tight',
-        'savefig.pad_inches': 0.3  # увеличенные отступы
+        'savefig.pad_inches': 0.3
     })
     
-    # Создание фигуры с двумя подграфиками - увеличенный размер для полной ширины
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6), facecolor='white')
+    # Создание фигуры только с круговой диаграммой
+    fig, ax = plt.subplots(1, 1, figsize=(6, 6), facecolor='white')
     
-    # === ЛЕВЫЙ ГРАФИК - СТОЛБИКОВАЯ ДИАГРАММА ===
-    bars = ax1.bar(labels, values, color=chart_colors, 
-                   edgecolor='white', linewidth=1.5, alpha=0.9)
+    # === КРУГОВАЯ ДИАГРАММА ===
+    wedges, texts = ax.pie(values, labels=None, colors=chart_colors,
+                          startangle=90, wedgeprops={'linewidth': 2, 'edgecolor': 'white'})
     
-    # Настройка столбиковой диаграммы
-    ax1.set_ylim(0, max(values) * 1.2)
-    ax1.set_ylabel('Количество баллов', fontsize=13, color='#2C3E50', fontweight='bold')
-    ax1.set_title('PAEI - Уровни по типам', fontsize=14, fontweight='bold', 
-                  color='#2C3E50', pad=20)
+    # Обеспечиваем правильный круг
+    ax.set_aspect('equal')
     
-    # Добавление значений на столбцы
-    for bar, value in zip(bars, values):
-        ax1.text(bar.get_x() + bar.get_width()/2, value + max(values)*0.02, 
-                f'{value}', ha='center', va='bottom', 
-                fontsize=12, fontweight='bold', color='#2C3E50')
-    
-    # Стилизация столбиковой диаграммы
-    ax1.spines['top'].set_visible(False)
-    ax1.spines['right'].set_visible(False)
-    ax1.spines['left'].set_color('#BDC3C7')
-    ax1.spines['bottom'].set_color('#BDC3C7')
-    ax1.tick_params(colors='#34495E', labelsize=10)
-    ax1.set_facecolor('white')
-    ax1.grid(True, alpha=0.3, color='#BDC3C7', linewidth=0.5)
-    ax1.set_axisbelow(True)
-    
-    # === ПРАВЫЙ ГРАФИК - КРУГОВАЯ ДИАГРАММА ===
-    wedges, texts = ax2.pie(values, labels=None, colors=chart_colors,
-                            startangle=90, wedgeprops={'linewidth': 2, 'edgecolor': 'white'})
-    
-    ax2.set_title('PAEI - Пропорции баллов', fontsize=14, fontweight='bold', 
-                  color='#2C3E50', pad=20)
+    ax.set_title('PAEI - Распределение ролей', fontsize=16, fontweight='bold', 
+                 color='#2C3E50', pad=20)
     
     # Добавление текста в сегменты
     for i, (wedge, label, value, percentage, rus_label) in enumerate(zip(wedges, labels, values, percentages, russian_labels)):
@@ -489,18 +466,17 @@ def make_paei_combined_chart(labels, values, out_path: Path, title: str = "") ->
         
         # Размещаем текст внутри сегмента
         if percentage > 8:  # Только для достаточно больших сегментов
-            ax2.text(x, y, f'{rus_label}\n{label} - {value}\n{percentage:.1f}%', 
+            ax.text(x, y, f'{rus_label}\n{label} - {value}\n{percentage:.1f}%', 
                    ha='center', va='center', fontsize=11, fontweight='bold',
-                   color='black')
+                   color='white' if label in ['E'] else 'black')
     
     # Общая настройка фигуры
-    fig.suptitle(title, fontsize=16, fontweight='bold', color='#2C3E50', y=0.98)
+    fig.suptitle(title, fontsize=18, fontweight='bold', color='#2C3E50', y=0.95)
     
-    # Настройка размещения для максимального использования пространства
+    # Настройка размещения
     plt.tight_layout()
-    plt.subplots_adjust(top=0.88, wspace=0.3)  # увеличенное пространство между графиками
     
-    # Сохранение с увеличенным DPI для четкости
+    # Сохранение
     fig.savefig(out_path, format='png', bbox_inches='tight', 
                 pad_inches=0.3, facecolor='white', 
                 edgecolor='none', dpi=150)
@@ -509,7 +485,7 @@ def make_paei_combined_chart(labels, values, out_path: Path, title: str = "") ->
 
 def make_disc_combined_chart(labels, values, out_path: Path, title: str = "") -> Path:
     """
-    Создает комбинированную диаграмму для DISC - столбиковая слева, круговая справа
+    Создает столбиковую диаграмму для DISC (убрана круговая)
     
     Args:
         labels: Названия категорий DISC
@@ -519,10 +495,6 @@ def make_disc_combined_chart(labels, values, out_path: Path, title: str = "") ->
     """
     # Сбалансированная цветовая схема DISC
     colors = PSYCH_COLORS['DISC']
-    
-    # Подготовка данных
-    total = sum(values)
-    percentages = [(value / total) * 100 for value in values]
     
     # Маппинг меток на русские названия
     label_mapping = {
@@ -535,77 +507,53 @@ def make_disc_combined_chart(labels, values, out_path: Path, title: str = "") ->
     russian_labels = [label_mapping.get(label, label) for label in labels]
     chart_colors = [colors.get(label, '#3498DB') for label in labels]
     
-    # Настройка matplotlib для качественной печати на полную ширину
+    # Настройка matplotlib для качественной печати
     plt.rcParams.update({
         'font.size': 12,
         'font.family': 'sans-serif',
         'axes.linewidth': 1.2,
-        'figure.dpi': 150,  # увеличенный DPI для лучшего качества
+        'figure.dpi': 150,
         'savefig.dpi': 150,
         'savefig.bbox': 'tight',
-        'savefig.pad_inches': 0.3  # увеличенные отступы
+        'savefig.pad_inches': 0.3
     })
     
-    # Создание фигуры с двумя подграфиками - увеличенный размер для полной ширины
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6), facecolor='white')
+    # Создание фигуры только со столбиковой диаграммой
+    fig, ax = plt.subplots(1, 1, figsize=(5, 6), facecolor='white')
     
-    # === ЛЕВЫЙ ГРАФИК - СТОЛБИКОВАЯ ДИАГРАММА ===
-    bars = ax1.bar(labels, values, color=chart_colors, 
-                   edgecolor='white', linewidth=1.5, alpha=0.9)
+    # === СТОЛБИКОВАЯ ДИАГРАММА ===
+    bars = ax.bar(labels, values, color=chart_colors, 
+                  edgecolor='white', linewidth=1.5, alpha=0.9)
     
     # Настройка столбиковой диаграммы
-    ax1.set_ylim(0, max(values) * 1.2)
-    ax1.set_ylabel('Количество баллов', fontsize=13, color='#2C3E50', fontweight='bold')
-    ax1.set_title('DISC - Уровни по типам', fontsize=14, fontweight='bold', 
-                  color='#2C3E50', pad=20)
+    ax.set_ylim(0, max(values) * 1.2)
+    ax.set_ylabel('Средний балл (1-5)', fontsize=13, color='#2C3E50', fontweight='bold')
+    ax.set_title('DISC - Уровни по типам', fontsize=16, fontweight='bold', 
+                 color='#2C3E50', pad=20)
     
     # Добавление значений на столбцы
     for bar, value in zip(bars, values):
-        ax1.text(bar.get_x() + bar.get_width()/2, value + max(values)*0.02, 
-                f'{value}', ha='center', va='bottom', 
-                fontsize=12, fontweight='bold', color='#2C3E50')
+        ax.text(bar.get_x() + bar.get_width()/2, value + max(values)*0.02, 
+               f'{value}', ha='center', va='bottom', 
+               fontsize=12, fontweight='bold', color='#2C3E50')
     
     # Стилизация столбиковой диаграммы
-    ax1.spines['top'].set_visible(False)
-    ax1.spines['right'].set_visible(False)
-    ax1.spines['left'].set_color('#BDC3C7')
-    ax1.spines['bottom'].set_color('#BDC3C7')
-    ax1.tick_params(colors='#34495E', labelsize=12)
-    ax1.set_facecolor('white')
-    ax1.grid(True, alpha=0.3, color='#BDC3C7', linewidth=0.5)
-    ax1.set_axisbelow(True)
-    
-    # === ПРАВЫЙ ГРАФИК - КРУГОВАЯ ДИАГРАММА ===
-    wedges, texts = ax2.pie(values, labels=None, colors=chart_colors,
-                            startangle=90, wedgeprops={'linewidth': 2, 'edgecolor': 'white'})
-    
-    ax2.set_title('DISC - Пропорции баллов', fontsize=14, fontweight='bold', 
-                  color='#2C3E50', pad=20)
-    
-    # Добавление текста в сегменты
-    for i, (wedge, label, value, percentage, rus_label) in enumerate(zip(wedges, labels, values, percentages, russian_labels)):
-        # Вычисляем угол для размещения текста
-        angle = (wedge.theta2 + wedge.theta1) / 2
-        
-        # Размещаем текст в зависимости от размера сегмента
-        radius_factor = 0.7 if percentage > 15 else 0.8
-        x = radius_factor * wedge.r * np.cos(np.radians(angle))
-        y = radius_factor * wedge.r * np.sin(np.radians(angle))
-        
-        # Размещаем текст внутри сегмента
-        if percentage > 8:  # Только для достаточно больших сегментов
-            ax2.text(x, y, f'{rus_label}\n{label} - {value}\n{percentage:.1f}%', 
-                   ha='center', va='center', fontsize=11, fontweight='bold',
-                   color='white' if label in ['D'] else 'black')  # белый текст для темных цветов
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_color('#BDC3C7')
+    ax.spines['bottom'].set_color('#BDC3C7')
+    ax.tick_params(colors='#34495E', labelsize=12)
+    ax.set_facecolor('white')
+    ax.grid(True, alpha=0.3, color='#BDC3C7', linewidth=0.5)
+    ax.set_axisbelow(True)
     
     # Общая настройка фигуры
-    fig.suptitle(title, fontsize=16, fontweight='bold', color='#2C3E50', y=0.98)
+    fig.suptitle(title, fontsize=18, fontweight='bold', color='#2C3E50', y=0.95)
     
-    # Настройка размещения для максимального использования пространства
+    # Настройка размещения
     plt.tight_layout()
-    plt.subplots_adjust(top=0.88, wspace=0.3)  # увеличенное пространство между графиками
     
-    # Сохранение с увеличенным DPI для четкости
+    # Сохранение
     fig.savefig(out_path, format='png', bbox_inches='tight', 
                 pad_inches=0.3, facecolor='white', 
                 edgecolor='none', dpi=150)
@@ -668,7 +616,7 @@ def make_hexaco_radar(labels, values, out_path: Path, title: str = "", max_value
     angles += angles[:1]
     vals = list(display_values) + display_values[:1]
     # Создание фигуры с увеличенным размером для длинных лейблов
-    fig = plt.figure(figsize=(7, 7), facecolor=PRINT_COLORS['background'])
+    fig = plt.figure(figsize=(2.5, 2.5), facecolor=PRINT_COLORS['background'])
     ax = plt.subplot(111, polar=True)
     # Настройка полярных осей
     ax.set_theta_offset(pi / 2)

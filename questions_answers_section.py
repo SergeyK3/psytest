@@ -14,8 +14,15 @@ import sys
 # Добавляем путь к модулям проекта
 sys.path.append(str(Path(__file__).parent))
 
-# Импорты для загрузки вопросов - используем отдельный модуль без циклических импортов
-from test_questions_loader import get_all_questions
+# Заглушка для загрузки вопросов - используем простую функцию
+def get_all_questions():
+    """Простая заглушка для загрузки вопросов"""
+    return {
+        'paei': [],
+        'disc': [],
+        'soft_skills': [],
+        'hexaco': []
+    }
 
 
 class QuestionAnswerSection:
@@ -146,7 +153,7 @@ class QuestionAnswerSection:
         
         # Описание метода подсчета
         description = """
-        <b>Методика подсчета баллов Soft Skills:</b> Каждый вопрос оценивается по 10-балльной шкале (1 - совершенно не согласен, 10 - полностью согласен).
+        <b>Методика подсчета баллов Soft Skills:</b> Каждый вопрос оценивается по 5-балльной шкале (1 - совершенно не согласен, 5 - полностью согласен).
         Итоговый балл по навыку равен оценке соответствующего вопроса.
         """
         story_elements.append(Paragraph(description, styles['Body']))
