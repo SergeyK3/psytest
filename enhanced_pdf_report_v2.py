@@ -73,13 +73,13 @@ class EnhancedCharts:
     def create_minimalist_radar(labels: List[str], values: List[float], 
                                title: str, out_path: Path) -> Path:
         """Создаёт минималистичную радарную диаграмму"""
-        return make_radar(labels, values, out_path, title=title, max_value=10)
+        return make_radar(labels, values, out_path, title=title, max_value=5, normalize=False)
     
     @staticmethod
     def create_minimalist_bar_chart(labels: List[str], values: List[float],
                                    title: str, out_path: Path) -> Path:
         """Создаёт минималистичную столбчатую диаграмму"""
-        return make_bar_chart(labels, values, out_path, title=title, max_value=10)
+        return make_bar_chart(labels, values, out_path, title=title, max_value=5, normalize=False)
     
     @staticmethod
     def create_paei_combined_chart(labels: List[str], values: List[float],
@@ -97,7 +97,7 @@ class EnhancedCharts:
     def create_hexaco_radar(labels: List[str], values: List[float], 
                           title: str, out_path: Path) -> Path:
         """Создаёт радарную диаграмму HEXACO с расшифровками аббревиатур"""
-        return make_hexaco_radar(labels, values, out_path, title=title)
+        return make_hexaco_radar(labels, values, out_path, title=title, max_value=5, normalize=False)
 
 
 class EnhancedPDFReportV2:
@@ -364,37 +364,13 @@ class EnhancedPDFReportV2:
         story.append(Paragraph("<b>Результаты тестирования:</b>", styles['Body']))
         bullet_items = [
             f"<b>Тест Адизеса (PAEI)</b> - оценка управленческих ролей и стилей руководства (5 вопросов по 4 типам). Преобладает роль {paei_names.get(max_paei, max_paei)} - {paei_scores[max_paei]} баллов",
-            f"<b>Оценка Soft Skills</b> - анализ надпрофессиональных компетенций (10 вопросов по 10-балльной шкале). Наиболее развитый навык: {max_soft} - {soft_skills_scores[max_soft]} баллов",
+            f"<b>Оценка Soft Skills</b> - анализ надпрофессиональных компетенций (10 вопросов по 5-балльной шкале). Наиболее развитый навык: {max_soft} - {soft_skills_scores[max_soft]} баллов",
             f"<b>HEXACO</b> - современная шестифакторная модель личности (10 вопросов по 5-балльной шкале). Выраженная личностная черта: {max_hexaco} ({hexaco_scores[max_hexaco]} баллов)",
             f"<b>DISC</b> - методика оценки поведенческих особенностей и стилей (8 вопросов по 4 типам). {disc_names.get(max_disc, max_disc)} ({disc_scores[max_disc]} баллов)",
         ]
         for item in bullet_items:
             story.append(Paragraph(item, style=styles['ListWithIndent'], bulletText='•'))
-        story.append(Spacer(1, 2 * mm))
-
-        # Профессиональные рекомендации
-        story.append(Paragraph("<b>Рекомендации по профессиональному развитию:</b>", styles['SubTitle']))
-
-        # 1. Использование сильных сторон
-        story.append(Paragraph("<b>1. Использование сильных сторон:</b>", styles['Body']))
-        story.append(Paragraph(f"• (PAEI): Делегировать задачи, соответствующие профилю {paei_names.get(max_paei, max_paei)}", styles['ListWithIndent']))
-        story.append(Paragraph(f"• (Soft Skills): Развивать {max_soft.lower()} через специализированные проекты", styles['ListWithIndent']))
-        story.append(Paragraph(f"• (DISC): Использовать {disc_names.get(max_disc, max_disc)} в командном взаимодействии", styles['ListWithIndent']))
-        story.append(Spacer(1, 2 * mm))
-
-        # 2. Области для развития
-        story.append(Paragraph("<b>2. Области для развития:</b>", styles['Body']))
-        story.append(Paragraph("• (PAEI): Работать над менее выраженными управленческими ролями", styles['ListWithIndent']))
-        story.append(Paragraph("• (Soft Skills): Развивать дополнительные soft skills для универсальности [поиск курсов в Google]", styles['ListWithIndent']))
-        story.append(Paragraph("• (DISC): Балансировать поведенческий стиль в зависимости от ситуации", styles['ListWithIndent']))
-        story.append(Spacer(1, 2 * mm))
-
-        # 3. Карьерные перспективы
-        story.append(Paragraph("<b>3. Карьерные перспективы:</b>", styles['Body']))
-        story.append(Paragraph(f"• (PAEI): Рассмотреть позиции, требующие качеств {paei_names.get(max_paei, max_paei)}", styles['ListWithIndent']))
-        story.append(Paragraph("• (HEXACO): Планировать развитие с учетом личностного профиля HEXACO", styles['ListWithIndent']))
-        story.append(Paragraph("• (DISC): Выстраивать команду с учетом комплементарных ролей по DISC", styles['ListWithIndent']))
-        story.append(Spacer(1, 6 * mm))  # уменьшен отступ с 10мм до 6мм
+        story.append(Spacer(1, 6 * mm))  # отступ перед переходом к детальным разделам
 
         # Переход к детальным разделам
         story.append(PageBreak())
@@ -429,29 +405,24 @@ class EnhancedPDFReportV2:
         # === 2. SOFT SKILLS - МЯГКИЕ НАВЫКИ ===
         story.append(Paragraph("2. SOFT SKILLS - ОЦЕНКА МЯГКИХ НАВЫКОВ", styles['SectionTitle']))
 
-        test_description = "Оценка Soft Skills - анализ надпрофессиональных компетенций (10 вопросов по 10-балльной шкале)."
+        test_description = "Оценка Soft Skills - анализ надпрофессиональных компетенций (10 вопросов по 5-балльной шкале)."
         story.append(Paragraph(test_description, styles['Body']))
         story.append(Spacer(1, 3 * mm))
 
         soft_description = """
         <b>Soft Skills</b> - это надпрофессиональные навыки, которые помогают решать жизненные и рабочие задачи 
-        независимо от специальности. Включают коммуникативные способности, лидерские качества, креативность, 
-        аналитическое мышление и адаптивность. Эти навыки определяют эффективность взаимодействия с людьми 
-        и способность к профессиональному росту в любой сфере деятельности.
+        независимо от специальности. Включают коммуникативные способности, способность работать в команде, лидерские качества, критическое мышление,  
+        управление временем, стрессоустойчивость, восприятие критики (как элемент эмоционального интеллекта), адаптивность, 
+        способность решать проблемы, креативность. Эти навыки определяют эффективность взаимодействия с людьми и способность
+        к профессиональному росту в любой сфере деятельности.
         """
         story.append(Paragraph(soft_description, styles['Body']))
         story.append(Spacer(1, 5 * mm))
 
-        soft_results = f"<b>Результаты:</b> {self._format_scores(soft_skills_scores)}"
-        story.append(Paragraph(soft_results, styles['Body']))
-        story.append(Spacer(1, 3 * mm))
-
         if 'soft_skills' in chart_paths:
             self._add_chart_to_story(story, chart_paths['soft_skills'], styles)
 
-        if 'soft_skills' in ai_interpretations:
-            story.append(Paragraph("<b>Интерпретация:</b>", styles['SubTitle']))
-            story.append(Paragraph(ai_interpretations['soft_skills'], styles['Body']))
+
 
         story.append(Spacer(1, 4 * mm))
 
@@ -463,7 +434,7 @@ class EnhancedPDFReportV2:
         story.append(Spacer(1, 3 * mm))
 
         hexaco_description = """
-        <b>HEXACO</b> - современная шестифакторная модель личности, включающая основные измерения:<br/>
+        <b>Основные измерения HEXACO:</b><br/>
         • <b>H (Honesty-Humility)</b> - честность, скромность, искренность в отношениях<br/>
         • <b>E (Emotionality)</b> - эмоциональность, чувствительность, эмпатия<br/>
         • <b>X (eXtraversion)</b> - экстраверсия, социальная активность, общительность<br/>
@@ -473,10 +444,6 @@ class EnhancedPDFReportV2:
         """
         story.append(Paragraph(hexaco_description, styles['Body']))
         story.append(Spacer(1, 5 * mm))
-
-        hexaco_results = f"<b>Результаты:</b> {self._format_scores(hexaco_scores)}"
-        story.append(Paragraph(hexaco_results, styles['Body']))
-        story.append(Spacer(1, 3 * mm))
 
         if 'hexaco' in chart_paths:
             self._add_chart_to_story(story, chart_paths['hexaco'], styles)
@@ -503,10 +470,6 @@ class EnhancedPDFReportV2:
         story.append(Paragraph(disc_description, styles['Body']))
         story.append(Spacer(1, 5 * mm))
 
-        disc_results = f"<b>Результаты:</b> {self._format_scores(disc_scores)}"
-        story.append(Paragraph(disc_results, styles['Body']))
-        story.append(Spacer(1, 3 * mm))
-
         if 'disc' in chart_paths:
             self._add_chart_to_story(story, chart_paths['disc'], styles)
 
@@ -514,6 +477,32 @@ class EnhancedPDFReportV2:
             story.append(Paragraph("<b>Интерпретация:</b>", styles['SubTitle']))
             story.append(Paragraph(ai_interpretations['disc'], styles['Body']))
         story.append(Spacer(1, 4 * mm))
+
+        # === РЕКОМЕНДАЦИИ ПО ПРОФЕССИОНАЛЬНОМУ РАЗВИТИЮ (В КОНЦЕ ОТЧЕТА) ===
+        story.append(PageBreak())
+        story.append(Paragraph("РЕКОМЕНДАЦИИ ПО ПРОФЕССИОНАЛЬНОМУ РАЗВИТИЮ", styles['SectionTitle']))
+        story.append(Spacer(1, 4 * mm))
+
+        # 1. Использование сильных сторон
+        story.append(Paragraph("<b>1. Использование сильных сторон:</b>", styles['SubTitle']))
+        story.append(Paragraph(f"• (PAEI): Делегировать задачи, соответствующие профилю {paei_names.get(max_paei, max_paei)}", styles['ListWithIndent']))
+        story.append(Paragraph(f"• (Soft Skills): Развивать {max_soft.lower()} через специализированные проекты", styles['ListWithIndent']))
+        story.append(Paragraph(f"• (DISC): Использовать {disc_names.get(max_disc, max_disc)} в командном взаимодействии", styles['ListWithIndent']))
+        story.append(Spacer(1, 4 * mm))
+
+        # 2. Области для развития
+        story.append(Paragraph("<b>2. Области для развития:</b>", styles['SubTitle']))
+        story.append(Paragraph("• (PAEI): Работать над менее выраженными управленческими ролями", styles['ListWithIndent']))
+        story.append(Paragraph("• (Soft Skills): Развивать дополнительные soft skills для универсальности [поиск курсов в Google]", styles['ListWithIndent']))
+        story.append(Paragraph("• (DISC): Балансировать поведенческий стиль в зависимости от ситуации", styles['ListWithIndent']))
+        story.append(Spacer(1, 4 * mm))
+
+        # 3. Карьерные перспективы
+        story.append(Paragraph("<b>3. Карьерные перспективы:</b>", styles['SubTitle']))
+        story.append(Paragraph(f"• (PAEI): Рассмотреть позиции, требующие качеств {paei_names.get(max_paei, max_paei)}", styles['ListWithIndent']))
+        story.append(Paragraph("• (HEXACO): Планировать развитие с учетом личностного профиля HEXACO", styles['ListWithIndent']))
+        story.append(Paragraph("• (DISC): Выстраивать команду с учетом комплементарных ролей по DISC", styles['ListWithIndent']))
+        story.append(Spacer(1, 6 * mm))
 
         # === РАЗДЕЛ С ДЕТАЛИЗАЦИЕЙ ВОПРОСОВ И ОТВЕТОВ (ОПЦИОНАЛЬНЫЙ) ===
         if self.include_questions_section and self.qa_section and user_answers:
@@ -605,7 +594,7 @@ class EnhancedPDFReportV2:
             "Критическое мышление",
             "Управление временем",
             "Стрессоустойчивость",
-            "Эмоциональный интеллект",
+            "Восприимчивость к критике",
             "Адаптивность",
             "Решение проблем",
             "Креативность"
