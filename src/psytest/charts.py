@@ -177,7 +177,7 @@ def make_radar(labels, values, out_path: Path, title: str = "", max_value: int =
     ax.set_xticklabels(labels, fontsize=10, color=PRINT_COLORS['primary'])
     
     # Улучшенная радиальная сетка
-    if actual_max <= 4:
+    if actual_max <= 5:
         tick_step = 1
     elif actual_max <= 8:
         tick_step = 2
@@ -677,7 +677,7 @@ def make_hexaco_radar(labels, values, out_path: Path, title: str = "", max_value
     ax.set_xticks(angles[:-1])
     ax.set_xticklabels(extended_labels, fontsize=9, color=PRINT_COLORS['primary'])
     # Улучшенная радиальная сетка
-    if actual_max <= 4:
+    if actual_max <= 5:
         tick_step = 1
     elif actual_max <= 8:
         tick_step = 2
