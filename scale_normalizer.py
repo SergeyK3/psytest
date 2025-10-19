@@ -13,7 +13,7 @@ class ScaleNormalizer:
         "PAEI": 5,        # 5 вопросов с альтернативным выбором
         "DISC": 8,        # максимальная шкала 8
         "HEXACO": 5,      # максимальная оценка 5
-        "SOFT_SKILLS": 10 # максимальная оценка 10
+        "SOFT_SKILLS": 5  # максимальная оценка 5 (по 5-балльной шкале)
     }
     
     @staticmethod
@@ -32,10 +32,10 @@ class ScaleNormalizer:
     
     @staticmethod
     def normalize_disc(scores: Dict[str, float]) -> Tuple[Dict[str, float], str]:
-        """Возвращает DISC баллы без нормализации (шкала 0-8)"""
+        """Возвращает DISC баллы без нормализации (шкала 1-5, среднее значение)"""
         # Возвращаем оригинальные значения, округленные до 1 знака
         original_scores = {k: round(v, 1) for k, v in scores.items()}
-        method = "DISC: оригинальная шкала 0-8 (без нормализации)"
+        method = "DISC: оригинальная шкала 1-5 (среднее значение, без нормализации)"
         return original_scores, method
     
     @staticmethod
@@ -48,10 +48,10 @@ class ScaleNormalizer:
     
     @staticmethod
     def normalize_soft_skills(scores: Dict[str, float]) -> Tuple[Dict[str, float], str]:
-        """Возвращает Soft Skills баллы без нормализации (оригинальная шкала 1-10)"""
+        """Возвращает Soft Skills баллы без нормализации (оригинальная шкала 1-5)"""
         # Возвращаем оригинальные значения без нормализации
         original_scores = {k: round(v, 1) for k, v in scores.items()}
-        method = "Soft Skills: оригинальная шкала 1-10 (без нормализации)"
+        method = "Soft Skills: оригинальная шкала 1-5 (без нормализации)"
         return original_scores, method
     
     @staticmethod

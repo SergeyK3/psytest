@@ -20,7 +20,7 @@ def render_pdf(scores: dict, chart_path: Path, out_path: Path, title: str = "–û—
         y -= 0.7*cm
 
     if chart_path and chart_path.exists():
-        c.drawImage(str(chart_path), width - 14*cm, 2*cm, width=12*cm, preserveAspectRatio=True, mask='auto')
+        c.drawImage(str(chart_path), width - 12*cm, 2*cm, width=10*cm, height=10*cm, preserveAspectRatio=True, mask='auto')
 
     c.showPage()
     c.save()

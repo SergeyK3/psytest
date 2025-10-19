@@ -47,14 +47,14 @@ class DesignConfig:
     # Размеры (в мм)
     PAGE_WIDTH = 210
     PAGE_HEIGHT = 297
-    MARGIN = 20
+    MARGIN = 15               # уменьшено с 20 до 15мм
     
-    # Размеры графиков (в мм) - расширены на всю ширину страницы
-    RADAR_SIZE = 160  # увеличено для использования полной ширины
-    BAR_CHART_WIDTH = 180  # увеличено для полной ширины
-    BAR_CHART_HEIGHT = 90  # увеличено пропорционально
-    PAEI_COMBINED_WIDTH = 180  # специальный размер для комбинированной диаграммы PAEI
-    PAEI_COMBINED_HEIGHT = 90  # высота комбинированной диаграммы
+    # Размеры графиков (в мм) - компактные размеры
+    RADAR_SIZE = 70               # уменьшено с 80 до 70
+    BAR_CHART_WIDTH = 110         # уменьшено с 125 до 110
+    BAR_CHART_HEIGHT = 65         # уменьшено с 75 до 65
+    PAEI_COMBINED_WIDTH = 100     # уменьшено с 120 до 100
+    PAEI_COMBINED_HEIGHT = 100    # уменьшено с 120 до 100
     
     # Шрифты (используем встроенные Unicode шрифты) - изменяемые атрибуты
     TITLE_FONT: str = "Times-Bold"
@@ -177,9 +177,12 @@ class EnhancedPDFReportV2:
         if chart_path.exists():
             try:
                 # Специальные размеры для комбинированных диаграмм
-                if "paei_combined" in str(chart_path) or "disc_combined" in str(chart_path):
+                if "paei_combined" in str(chart_path):
                     chart_width = DesignConfig.PAEI_COMBINED_WIDTH
                     chart_height = DesignConfig.PAEI_COMBINED_HEIGHT
+                elif "disc_combined" in str(chart_path):
+                    chart_width = DesignConfig.BAR_CHART_WIDTH
+                    chart_height = DesignConfig.BAR_CHART_HEIGHT
                 # Используем стандартные размеры если не указаны явно
                 elif width is None:
                     chart_width = DesignConfig.RADAR_SIZE
@@ -370,17 +373,14 @@ class EnhancedPDFReportV2:
         ]
         for item in bullet_items:
             story.append(Paragraph(item, style=styles['ListWithIndent'], bulletText='•'))
-        story.append(Spacer(1, 6 * mm))  # отступ перед переходом к детальным разделам
+        story.append(Spacer(1, 2 * mm))  # уменьшен отступ с 6мм до 2мм
 
-        # Переход к детальным разделам
-        story.append(PageBreak())
-
-        # === 1. ТЕСТ АДИЗЕСА (PAEI) ===
+        # === 1. ТЕСТ АДИЗЕСА (PAEI) - переносим на первую страницу ===
         story.append(Paragraph("1. ТЕСТ АДИЗЕСА (PAEI) - УПРАВЛЕНЧЕСКИЕ РОЛИ", styles['SectionTitle']))
 
         test_description = "Тест Адизеса (PAEI) - оценка управленческих ролей и стилей руководства (5 вопросов по 4 типам)."
         story.append(Paragraph(test_description, styles['Body']))
-        story.append(Spacer(1, 3 * mm))
+        story.append(Spacer(1, 2 * mm))
 
         story.append(Paragraph("<b>Расшифровка PAEI:</b>", styles['Body']))
         paei_bullets = [
@@ -391,23 +391,30 @@ class EnhancedPDFReportV2:
         ]
         for item in paei_bullets:
             story.append(Paragraph(item, style=styles['ListWithIndent'], bulletText='•'))
-        story.append(Spacer(1, 5 * mm))
+        story.append(Spacer(1, 2 * mm))
 
         if 'paei' in chart_paths:
             self._add_chart_to_story(story, chart_paths['paei'], styles)
 
+        # Добавляем интерпретацию PAEI
         if 'paei' in ai_interpretations:
             story.append(Paragraph("<b>Интерпретация:</b>", styles['SubTitle']))
+            story.append(Paragraph("Классификация по Адизесу:", styles['Body']))
+            story.append(Spacer(1, 1 * mm))
+            
             paei_text = ai_interpretations['paei'].replace('\n', '<br/>')
             story.append(Paragraph(paei_text, styles['Body']))
-        story.append(Spacer(1, 6 * mm))
+            story.append(Spacer(1, 2 * mm))
+
+        # Переход к детальным разделам на следующую страницу
+        story.append(PageBreak())
 
         # === 2. SOFT SKILLS - МЯГКИЕ НАВЫКИ ===
         story.append(Paragraph("2. SOFT SKILLS - ОЦЕНКА МЯГКИХ НАВЫКОВ", styles['SectionTitle']))
 
         test_description = "Оценка Soft Skills - анализ надпрофессиональных компетенций (10 вопросов по 5-балльной шкале)."
         story.append(Paragraph(test_description, styles['Body']))
-        story.append(Spacer(1, 3 * mm))
+        story.append(Spacer(1, 2 * mm))
 
         soft_description = """
         <b>Soft Skills</b> - это надпрофессиональные навыки, которые помогают решать жизненные и рабочие задачи 
@@ -417,14 +424,16 @@ class EnhancedPDFReportV2:
         к профессиональному росту в любой сфере деятельности.
         """
         story.append(Paragraph(soft_description, styles['Body']))
-        story.append(Spacer(1, 5 * mm))
+        story.append(Spacer(1, 2 * mm))
 
         if 'soft_skills' in chart_paths:
             self._add_chart_to_story(story, chart_paths['soft_skills'], styles)
 
-
-
-        story.append(Spacer(1, 4 * mm))
+        if 'soft_skills' in ai_interpretations:
+            story.append(Paragraph("<b>Интерпретация Soft Skills:</b>", styles['SubTitle']))
+            soft_text = ai_interpretations['soft_skills'].replace('\n', '<br/>')
+            story.append(Paragraph(soft_text, styles['Body']))
+            story.append(Spacer(1, 2 * mm))
 
         # === 3. ТЕСТ HEXACO - ЛИЧНОСТНЫЕ ЧЕРТЫ ===
         story.append(Paragraph("3. ТЕСТ HEXACO - МОДЕЛЬ ЛИЧНОСТИ", styles['SectionTitle']))
@@ -451,7 +460,7 @@ class EnhancedPDFReportV2:
         if 'hexaco' in ai_interpretations:
             story.append(Paragraph("<b>Интерпретация:</b>", styles['SubTitle']))
             story.append(Paragraph(ai_interpretations['hexaco'], styles['Body']))
-        story.append(Spacer(1, 4 * mm))
+        story.append(Spacer(1, 2 * mm))
 
         # === 4. ТЕСТ DISC - ПОВЕДЕНЧЕСКИЕ СТИЛИ ===
         story.append(Paragraph("4. ТЕСТ DISC - МОДЕЛЬ ПОВЕДЕНИЯ", styles['SectionTitle']))
@@ -476,26 +485,26 @@ class EnhancedPDFReportV2:
         if 'disc' in ai_interpretations:
             story.append(Paragraph("<b>Интерпретация:</b>", styles['SubTitle']))
             story.append(Paragraph(ai_interpretations['disc'], styles['Body']))
-        story.append(Spacer(1, 4 * mm))
+        story.append(Spacer(1, 2 * mm))
 
         # === РЕКОМЕНДАЦИИ ПО ПРОФЕССИОНАЛЬНОМУ РАЗВИТИЮ (В КОНЦЕ ОТЧЕТА) ===
         story.append(PageBreak())
         story.append(Paragraph("РЕКОМЕНДАЦИИ ПО ПРОФЕССИОНАЛЬНОМУ РАЗВИТИЮ", styles['SectionTitle']))
-        story.append(Spacer(1, 4 * mm))
+        story.append(Spacer(1, 2 * mm))
 
         # 1. Использование сильных сторон
         story.append(Paragraph("<b>1. Использование сильных сторон:</b>", styles['SubTitle']))
         story.append(Paragraph(f"• (PAEI): Делегировать задачи, соответствующие профилю {paei_names.get(max_paei, max_paei)}", styles['ListWithIndent']))
         story.append(Paragraph(f"• (Soft Skills): Развивать {max_soft.lower()} через специализированные проекты", styles['ListWithIndent']))
         story.append(Paragraph(f"• (DISC): Использовать {disc_names.get(max_disc, max_disc)} в командном взаимодействии", styles['ListWithIndent']))
-        story.append(Spacer(1, 4 * mm))
+        story.append(Spacer(1, 2 * mm))
 
         # 2. Области для развития
         story.append(Paragraph("<b>2. Области для развития:</b>", styles['SubTitle']))
         story.append(Paragraph("• (PAEI): Работать над менее выраженными управленческими ролями", styles['ListWithIndent']))
         story.append(Paragraph("• (Soft Skills): Развивать дополнительные soft skills для универсальности [поиск курсов в Google]", styles['ListWithIndent']))
         story.append(Paragraph("• (DISC): Балансировать поведенческий стиль в зависимости от ситуации", styles['ListWithIndent']))
-        story.append(Spacer(1, 4 * mm))
+        story.append(Spacer(1, 2 * mm))
 
         # 3. Карьерные перспективы
         story.append(Paragraph("<b>3. Карьерные перспективы:</b>", styles['SubTitle']))
@@ -717,7 +726,7 @@ class EnhancedPDFReportV2:
             
             print(f"[UPLOAD] Загрузка PDF отчета в Google Drive: {participant_name or 'неизвестный пользователь'}")
             
-            # Загружаем с месячной структурой папок: PsychTest Reports/2025/10-October
+            # Загружаем с месячной структурой папок: MyAiProjects/PsychTest Reports/2025/10-October
             web_link = upload_to_google_drive_oauth(
                 file_path=str(file_path),
                 folder_name="PsychTest Reports",
