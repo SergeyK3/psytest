@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from io import BytesIO
 from copy import deepcopy
+import re
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib.colors import Color
@@ -20,6 +21,7 @@ import os
 import sys
 from interpretation_utils import generate_interpretations_from_prompt
 from questions_answers_section import QuestionAnswerSection
+from interpretation_formatter import format_ai_interpretations, parse_hexaco_sections, parse_disc_sections
 
 # Добавляем путь к модулям проекта
 sys.path.append(str(Path(__file__).parent / "src"))
@@ -322,6 +324,9 @@ class EnhancedPDFReportV2:
         """Формирует последовательность элементов отчёта (story)."""
         styles = self._get_custom_styles()
         story = []
+        
+        # Форматируем AI интерпретации для улучшенного отображения
+        formatted_interpretations = format_ai_interpretations(ai_interpretations)
 
         # === ЗАГОЛОВОК ДОКУМЕНТА ===
         story.append(Paragraph("ОЦЕНКА КОМАНДНЫХ НАВЫКОВ", styles['MainTitle']))
@@ -397,12 +402,12 @@ class EnhancedPDFReportV2:
             self._add_chart_to_story(story, chart_paths['paei'], styles)
 
         # Добавляем интерпретацию PAEI
-        if 'paei' in ai_interpretations:
+        if 'paei' in formatted_interpretations:
             story.append(Paragraph("<b>Интерпретация:</b>", styles['SubTitle']))
             story.append(Paragraph("Классификация по Адизесу:", styles['Body']))
             story.append(Spacer(1, 1 * mm))
             
-            paei_text = ai_interpretations['paei'].replace('\n', '<br/>')
+            paei_text = formatted_interpretations['paei'].replace('\n', '<br/>')
             story.append(Paragraph(paei_text, styles['Body']))
             story.append(Spacer(1, 2 * mm))
 
@@ -429,9 +434,9 @@ class EnhancedPDFReportV2:
         if 'soft_skills' in chart_paths:
             self._add_chart_to_story(story, chart_paths['soft_skills'], styles)
 
-        if 'soft_skills' in ai_interpretations:
+        if 'soft_skills' in formatted_interpretations:
             story.append(Paragraph("<b>Интерпретация Soft Skills:</b>", styles['SubTitle']))
-            soft_text = ai_interpretations['soft_skills'].replace('\n', '<br/>')
+            soft_text = formatted_interpretations['soft_skills'].replace('\n', '<br/>')
             story.append(Paragraph(soft_text, styles['Body']))
             story.append(Spacer(1, 2 * mm))
 
@@ -457,9 +462,63 @@ class EnhancedPDFReportV2:
         if 'hexaco' in chart_paths:
             self._add_chart_to_story(story, chart_paths['hexaco'], styles)
 
-        if 'hexaco' in ai_interpretations:
-            story.append(Paragraph("<b>Интерпретация:</b>", styles['SubTitle']))
-            story.append(Paragraph(ai_interpretations['hexaco'], styles['Body']))
+        if 'hexaco' in formatted_interpretations:
+            # Разбиваем HEXACO на секции для лучшего форматирования
+            hexaco_sections = parse_hexaco_sections(formatted_interpretations['hexaco'])
+            
+            if hexaco_sections:
+                story.append(Paragraph("<b>Интерпретация HEXACO:</b>", styles['SubTitle']))
+                
+                # Добавляем качества HEXACO по отдельности
+                hexaco_qualities = [
+                    "Честность-Скромность",
+                    "Эмоциональность", 
+                    "Экстраверсия",
+                    "Добросовестность",
+                    "Доброжелательность",
+                    "Открытость к опыту"
+                ]
+                
+                for quality in hexaco_qualities:
+                    if quality in hexaco_sections:
+                        story.append(Spacer(1, 2 * mm))
+                        # Извлекаем балл из текста качества
+                        quality_text = hexaco_sections[quality]
+                        lines = quality_text.split('\n')
+                        if lines:
+                            first_line = lines[0].strip()
+                            remaining_text = '\n'.join(lines[1:]).strip() if len(lines) > 1 else ""
+                            
+                            # Делаем название качества жирным
+                            story.append(Paragraph(f"<b>{first_line}</b>", styles['SubTitle']))
+                            if remaining_text:
+                                clean_text = remaining_text.replace('\n', '<br/>')
+                                story.append(Paragraph(clean_text, styles['Body']))
+                
+                # Добавляем общий портрет личности
+                if "Общий портрет личности" in hexaco_sections:
+                    story.append(Spacer(1, 3 * mm))
+                    story.append(Paragraph("<b>Общий портрет личности:</b>", styles['SubTitle']))
+                    general_text = hexaco_sections["Общий портрет личности"]
+                    # Убираем заголовок из текста
+                    clean_general = re.sub(r'^Общий портрет личности:\s*', '', general_text, flags=re.IGNORECASE).strip()
+                    clean_general = clean_general.replace('\n', '<br/>')
+                    story.append(Paragraph(clean_general, styles['Body']))
+                
+                # Добавляем рекомендации психолога
+                if "Рекомендации психолога" in hexaco_sections:
+                    story.append(Spacer(1, 3 * mm))
+                    story.append(Paragraph("<b>Рекомендации психолога:</b>", styles['SubTitle']))
+                    recommendations_text = hexaco_sections["Рекомендации психолога"]
+                    # Убираем заголовок из текста
+                    clean_recommendations = re.sub(r'^Рекомендации психолога:\s*', '', recommendations_text, flags=re.IGNORECASE).strip()
+                    clean_recommendations = clean_recommendations.replace('\n', '<br/>')
+                    story.append(Paragraph(clean_recommendations, styles['Body']))
+            else:
+                # Fallback к стандартному форматированию
+                story.append(Paragraph("<b>Интерпретация:</b>", styles['SubTitle']))
+                clean_text = formatted_interpretations['hexaco'].replace('\n', '<br/>')
+                story.append(Paragraph(clean_text, styles['Body']))
         story.append(Spacer(1, 2 * mm))
 
         # === 4. ТЕСТ DISC - ПОВЕДЕНЧЕСКИЕ СТИЛИ ===
@@ -482,9 +541,53 @@ class EnhancedPDFReportV2:
         if 'disc' in chart_paths:
             self._add_chart_to_story(story, chart_paths['disc'], styles)
 
-        if 'disc' in ai_interpretations:
-            story.append(Paragraph("<b>Интерпретация:</b>", styles['SubTitle']))
-            story.append(Paragraph(ai_interpretations['disc'], styles['Body']))
+        if 'disc' in formatted_interpretations:
+            # Разбиваем DISC на секции для лучшего форматирования
+            disc_sections = parse_disc_sections(formatted_interpretations['disc'])
+            
+            if disc_sections:
+                story.append(Paragraph("<b>Интерпретация DISC:</b>", styles['SubTitle']))
+                
+                # Добавляем типы DISC по отдельности
+                disc_types = [
+                    "DISC_Доминированию",
+                    "DISC_Влиянию", 
+                    "DISC_Устойчивости",
+                    "DISC_Подчинению правилам"
+                ]
+                
+                for disc_type in disc_types:
+                    if disc_type in disc_sections:
+                        story.append(Spacer(1, 2 * mm))
+                        # Убираем префикс DISC_ для отображения и извлекаем первую строку
+                        section_text = disc_sections[disc_type]
+                        lines = section_text.split('\n')
+                        if lines:
+                            first_line = lines[0].strip()
+                            remaining_text = '\n'.join(lines[1:]).strip() if len(lines) > 1 else ""
+                            
+                            story.append(Paragraph(f"<b>{first_line}</b>", styles['SubTitle']))
+                            if remaining_text:
+                                clean_text = remaining_text.replace('\n', '<br/>')
+                                story.append(Paragraph(clean_text, styles['Body']))
+                
+                # Добавляем основные разделы
+                main_sections = ["Общий вывод", "Сильные стороны", "Зоны развития", "Рекомендации психолога"]
+                
+                for section in main_sections:
+                    if section in disc_sections:
+                        story.append(Spacer(1, 3 * mm))
+                        story.append(Paragraph(f"<b>{section}:</b>", styles['SubTitle']))
+                        section_text = disc_sections[section]
+                        # Убираем заголовок из текста
+                        clean_section = re.sub(rf'^{section}:\s*', '', section_text, flags=re.IGNORECASE).strip()
+                        clean_section = clean_section.replace('\n', '<br/>')
+                        story.append(Paragraph(clean_section, styles['Body']))
+            else:
+                # Fallback к стандартному форматированию
+                story.append(Paragraph("<b>Интерпретация:</b>", styles['SubTitle']))
+                clean_text = formatted_interpretations['disc'].replace('\n', '<br/>')
+                story.append(Paragraph(clean_text, styles['Body']))
         story.append(Spacer(1, 2 * mm))
 
         # === РЕКОМЕНДАЦИИ ПО ПРОФЕССИОНАЛЬНОМУ РАЗВИТИЮ (В КОНЦЕ ОТЧЕТА) ===
