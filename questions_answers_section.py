@@ -319,7 +319,7 @@ class QuestionAnswerSection:
         Генерирует раздел с вопросами и ответами Soft Skills
         
         Args:
-            user_answers: Ответы пользователя {question_index: rating_1_to_10}
+            user_answers: Ответы пользователя {question_index: rating_1_to_5}
             final_scores: Итоговые баллы по навыкам
             styles: Стили ReportLab
             
@@ -358,20 +358,18 @@ class QuestionAnswerSection:
             
             # Ответ пользователя
             if user_rating > 0:
-                answer_text = f"<b>Ответ:</b> {user_rating}/10 баллов"
-                story_elements.append(Paragraph(answer_text, styles['Body']))
-                
-                # Интерпретация балла
-                if user_rating >= 8:
-                    interpretation = "(Высокий уровень развития навыка)"
-                elif user_rating >= 6:
+                # Интерпретация балла для 5-балльной шкалы
+                if user_rating >= 4:
+                    interpretation = "(Выше среднего уровня)"
+                elif user_rating >= 3:
                     interpretation = "(Средний уровень развития навыка)"
-                elif user_rating >= 4:
+                elif user_rating >= 2:
                     interpretation = "(Ниже среднего уровня)"
                 else:
                     interpretation = "(Требует значительного развития)"
                 
-                story_elements.append(Paragraph(f"<i>{interpretation}</i>", styles['Body']))
+                answer_text = f"<b>Ответ:</b> {user_rating}/5 баллов {interpretation}"
+                story_elements.append(Paragraph(answer_text, styles['Body']))
             else:
                 story_elements.append(Paragraph("<i>Вопрос не был отвечен</i>", styles['Body']))
             
@@ -438,9 +436,6 @@ class QuestionAnswerSection:
             
             # Ответ пользователя
             if user_rating > 0:
-                answer_text = f"<b>Ответ:</b> {user_rating}/5 баллов"
-                story_elements.append(Paragraph(answer_text, styles['Body']))
-                
                 # Интерпретация балла
                 if user_rating >= 4:
                     interpretation = "(Высокая выраженность фактора)"
@@ -449,7 +444,8 @@ class QuestionAnswerSection:
                 else:
                     interpretation = "(Низкая выраженность фактора)"
                 
-                story_elements.append(Paragraph(f"<i>{interpretation}</i>", styles['Body']))
+                answer_text = f"<b>Ответ:</b> {user_rating}/5 баллов {interpretation}"
+                story_elements.append(Paragraph(answer_text, styles['Body']))
             else:
                 story_elements.append(Paragraph("<i>Вопрос не был отвечен</i>", styles['Body']))
             
