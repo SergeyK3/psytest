@@ -14,15 +14,196 @@ import sys
 # Добавляем путь к модулям проекта
 sys.path.append(str(Path(__file__).parent))
 
-# Заглушка для загрузки вопросов - используем простую функцию
+# Реальная загрузка вопросов из промпт файлов
 def get_all_questions():
-    """Простая заглушка для загрузки вопросов"""
-    return {
-        'paei': [],
-        'disc': [],
-        'soft_skills': [],
-        'hexaco': []
-    }
+    """Загружает реальные вопросы из промпт файлов"""
+    
+    def parse_paei_questions(prompt_text):
+        """Парсинг вопросов PAEI из текста промпта"""
+        lines = prompt_text.strip().split('\n')
+        questions = []
+        current_question = None
+        current_options = {}
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Проверяем, начинается ли строка с номера (1. 2. и т.д.)
+            if line[0].isdigit() and line[1:3] == '. ':
+                # Если есть текущий вопрос, сохраняем его
+                if current_question:
+                    questions.append({
+                        'question': current_question,
+                        'answers': current_options
+                    })
+                
+                # Начинаем новый вопрос
+                current_question = line[3:]  # Убираем "1. "
+                current_options = {}
+            
+            # Проверяем варианты ответов (P. A. E. I.)
+            elif line.startswith(('P. ', 'A. ', 'E. ', 'I. ')):
+                option_letter = line[0]
+                option_text = line[3:]  # Убираем "P. "
+                current_options[option_letter] = option_text
+        
+        # Добавляем последний вопрос
+        if current_question and current_options:
+            questions.append({
+                'question': current_question,
+                'answers': current_options
+            })
+        
+        return questions
+    
+    def parse_disc_questions(prompt_text):
+        """Парсинг вопросов DISC из промпт файла"""
+        lines = prompt_text.strip().split('\n')
+        questions = []
+        
+        for line in lines:
+            if not line.strip():
+                continue
+            
+            # Ищем строки с вопросами типа "1.1", "2.2" и т.д. (с отступом в два пробела)
+            if line.startswith('  ') and '.' in line.strip() and line.strip()[0].isdigit():
+                # Убираем отступ
+                line_clean = line.strip()
+                parts = line_clean.split(' ', 1)
+                if len(parts) > 1:
+                    question_id = parts[0]
+                    question_text = parts[1]
+                    
+                    # Определяем категорию по номеру
+                    if question_id.startswith('1.'):
+                        category = 'D'  # Доминирование
+                    elif question_id.startswith('2.'):
+                        category = 'I'  # Влияние
+                    elif question_id.startswith('3.'):
+                        category = 'S'  # Устойчивость
+                    elif question_id.startswith('4.'):
+                        category = 'C'  # Подчинение правилам
+                    else:
+                        category = 'Unknown'
+                    
+                    questions.append({
+                        'question': question_text,
+                        'category': category,
+                        'question_id': question_id
+                    })
+        
+        return questions
+    
+    def parse_soft_skills_questions(prompt_text):
+        """Парсинг вопросов Soft Skills из промпт файла"""
+        lines = prompt_text.strip().split('\n')
+        questions = []
+        current_question = None
+        current_skill_names = [
+            'Коммуникация', 'Лидерство', 'Командная работа', 'Критическое мышление',
+            'Управление временем', 'Стрессоустойчивость', 'Эмоциональный интеллект',
+            'Адаптивность', 'Решение проблем', 'Креативность'
+        ]
+        
+        for line in lines:
+            if not line.strip():
+                continue
+            
+            # Ищем основные вопросы (начинаются с цифры и точки БЕЗ отступа в начале строки)
+            if line.startswith(('1. ', '2. ', '3. ', '4. ', '5. ', '6. ', '7. ', '8. ', '9. ', '10.')):
+                question_text = line[line.find('. ') + 2:]  # Убираем "1. " или "10. "
+                question_num = int(line.split('.')[0]) - 1  # Получаем номер вопроса
+                
+                skill_name = current_skill_names[question_num] if question_num < len(current_skill_names) else f'Навык {question_num + 1}'
+                
+                questions.append({
+                    'question': question_text,
+                    'skill': skill_name
+                })
+        
+        return questions
+    
+    def parse_hexaco_questions(prompt_text):
+        """Парсинг вопросов HEXACO из промпт файла"""
+        lines = prompt_text.strip().split('\n')
+        questions = []
+        dimension_names = ['H', 'E', 'X', 'A', 'C', 'O']  # Порядок факторов HEXACO
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            
+            # Ищем вопросы (начинаются с цифры и точки)
+            if line[0].isdigit() and line[1:3] == '. ':
+                question_text = line[3:]  # Убираем "1. "
+                question_num = int(line[0]) - 1  # Получаем индекс (0-based)
+                
+                dimension = dimension_names[question_num] if question_num < len(dimension_names) else 'Unknown'
+                
+                questions.append({
+                    'question': question_text,
+                    'dimension': dimension
+                })
+        
+        return questions
+    
+    def parse_likert_questions(prompt_text, test_type):
+        """Общая функция парсинга вопросов с шкалой Ликерта"""
+        if test_type == 'disc':
+            return parse_disc_questions(prompt_text)
+        elif test_type == 'soft_skills':
+            return parse_soft_skills_questions(prompt_text)
+        elif test_type == 'hexaco':
+            return parse_hexaco_questions(prompt_text)
+        return []
+    
+    try:
+        # Загружаем PAEI вопросы
+        prompts_path = Path(__file__).parent / "data" / "prompts"
+        
+        paei_questions = []
+        if (prompts_path / "adizes_user.txt").exists():
+            with open(prompts_path / "adizes_user.txt", 'r', encoding='utf-8') as f:
+                prompt_text = f.read()
+                paei_questions = parse_paei_questions(prompt_text)
+        
+        # Загружаем остальные вопросы из промпт-файлов
+        disc_questions = []
+        if (prompts_path / "disc_user.txt").exists():
+            with open(prompts_path / "disc_user.txt", 'r', encoding='utf-8') as f:
+                prompt_text = f.read()
+                disc_questions = parse_likert_questions(prompt_text, 'disc')
+        
+        soft_skills_questions = []
+        if (prompts_path / "soft_user.txt").exists():
+            with open(prompts_path / "soft_user.txt", 'r', encoding='utf-8') as f:
+                prompt_text = f.read()
+                soft_skills_questions = parse_likert_questions(prompt_text, 'soft_skills')
+        
+        hexaco_questions = []
+        if (prompts_path / "hexaco_user.txt").exists():
+            with open(prompts_path / "hexaco_user.txt", 'r', encoding='utf-8') as f:
+                prompt_text = f.read()
+                hexaco_questions = parse_likert_questions(prompt_text, 'hexaco')
+        
+        return {
+            'paei': paei_questions,
+            'disc': disc_questions,
+            'soft_skills': soft_skills_questions,
+            'hexaco': hexaco_questions
+        }
+        
+    except Exception as e:
+        print(f"Ошибка загрузки вопросов: {e}")
+        return {
+            'paei': [],
+            'disc': [],
+            'soft_skills': [],
+            'hexaco': []
+        }
 
 
 class QuestionAnswerSection:

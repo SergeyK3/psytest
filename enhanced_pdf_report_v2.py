@@ -726,11 +726,11 @@ class EnhancedPDFReportV2:
             
             print(f"[UPLOAD] Загрузка PDF отчета в Google Drive: {participant_name or 'неизвестный пользователь'}")
             
-            # Загружаем с месячной структурой папок: MyAiProjects/PsychTest Reports/2025/10-October
+            # Загружаем напрямую в указанную папку без месячной структуры
             web_link = upload_to_google_drive_oauth(
                 file_path=str(file_path),
                 folder_name="PsychTest Reports",
-                use_monthly_structure=True
+                use_monthly_structure=False
             )
             
             if web_link:
