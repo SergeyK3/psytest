@@ -31,7 +31,6 @@ from interpretation_utils import generate_interpretations_from_prompt
 from src.psytest.ai_interpreter import get_ai_interpreter
 from report_archiver import save_report_copy
 from scale_normalizer import ScaleNormalizer
-from bot_integration_example import UserAnswersCollector
 
 # === НАСТРОЙКИ ===
 # Загружаем токен бота из переменной окружения
@@ -66,9 +65,6 @@ class UserSession:
         self.current_test = ""
         self.current_question = 0
         self.started_at = datetime.now()
-        
-        # Новое: коллектор ответов для детального раздела в отчете
-        self.answers_collector = UserAnswersCollector()
 
 # === ФУНКЦИИ ПАРСИНГА ВОПРОСОВ ===
 
@@ -519,10 +515,10 @@ async def handle_paei_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
         session.paei_scores[answer_code] += 1
         
         # НОВОЕ: сохраняем детальный ответ для раздела вопросов
-        session.answers_collector.add_paei_answer(
-            question_index=session.current_question,
-            selected_option=answer_code
-        )
+        # session.answers_collector.add_paei_answer(
+        #     question_index=session.current_question,
+        #     selected_option=answer_code
+        # )
         
         session.current_question += 1
         return await ask_paei_question(update, context)
@@ -618,10 +614,10 @@ async def handle_disc_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
         session.disc_scores[category] += score
         
         # НОВОЕ: сохраняем детальный ответ для раздела вопросов
-        session.answers_collector.add_disc_answer(
-            question_index=session.current_question,
-            rating=score
-        )
+        # session.answers_collector.add_disc_answer(
+        #     question_index=session.current_question,
+        #     rating=score
+        # )
         
         session.current_question += 1
         
@@ -704,10 +700,10 @@ async def handle_hexaco_answer(update: Update, context: ContextTypes.DEFAULT_TYP
             session.hexaco_scores.append(score)
             
             # НОВОЕ: сохраняем детальный ответ для раздела вопросов
-            session.answers_collector.add_hexaco_answer(
-                question_index=session.current_question,
-                rating=score
-            )
+            # session.answers_collector.add_hexaco_answer(
+            #     question_index=session.current_question,
+            #     rating=score
+            # )
             
             session.current_question += 1
             return await ask_hexaco_question(update, context)
@@ -795,10 +791,10 @@ async def handle_soft_skills_answer(update: Update, context: ContextTypes.DEFAUL
             session.soft_skills_scores.append(score)
             
             # НОВОЕ: сохраняем детальный ответ для раздела вопросов
-            session.answers_collector.add_soft_skills_answer(
-                question_index=session.current_question,
-                rating=score
-            )
+            # session.answers_collector.add_soft_skills_answer(
+            #     question_index=session.current_question,
+            #     rating=score
+            # )
             
             logger.info(f"📝 Soft Skills ответ от {user_id}: балл {score}")
             logger.info(f"📊 Текущий счет: {session.soft_skills_scores}")
@@ -909,7 +905,8 @@ def generate_user_report(session: UserSession) -> tuple[str, str]:
     
     try:
         # Всегда собираем ответы пользователя для отчета в Google Drive
-        user_answers = session.answers_collector.get_answers_dict()
+        # user_answers = session.answers_collector.get_answers_dict()
+        user_answers = {}  # Временно отключено
         
         # 🔍 ОТЛАДКА: Логируем собранные ответы
         logger.info(f"🔍 Собранные ответы пользователя:")
@@ -1067,7 +1064,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Методики: PAEI, DISC, HEXACO, Soft Skills
 • Результат: Персональный PDF отчет
 
-<b>Поддержка:</b> @psychtestteam
+<b>Поддержка:</b> @kimsergeiv
     """
     
     await update.message.reply_text(help_text, parse_mode='HTML')
