@@ -404,7 +404,6 @@ class EnhancedPDFReportV2:
         # Добавляем интерпретацию PAEI
         if 'paei' in formatted_interpretations:
             story.append(Paragraph("<b>Интерпретация:</b>", styles['SubTitle']))
-            story.append(Paragraph("Классификация по Адизесу:", styles['Body']))
             story.append(Spacer(1, 1 * mm))
             
             paei_text = formatted_interpretations['paei'].replace('\n', '<br/>')
@@ -479,8 +478,11 @@ class EnhancedPDFReportV2:
                     "Открытость к опыту"
                 ]
                 
+                # Отслеживаем уже добавленные качества для предотвращения дубликатов
+                added_qualities = set()
+                
                 for quality in hexaco_qualities:
-                    if quality in hexaco_sections:
+                    if quality in hexaco_sections and quality not in added_qualities:
                         story.append(Spacer(1, 2 * mm))
                         # Извлекаем балл из текста качества
                         quality_text = hexaco_sections[quality]
@@ -489,19 +491,34 @@ class EnhancedPDFReportV2:
                             first_line = lines[0].strip()
                             remaining_text = '\n'.join(lines[1:]).strip() if len(lines) > 1 else ""
                             
-                            # Делаем название качества жирным
-                            story.append(Paragraph(f"<b>{first_line}</b>", styles['SubTitle']))
+                            # Делаем название качества жирным - выделяем только название свойства без балла
+                            # Если в строке есть двоеточие, выделяем часть до двоеточия
+                            if ':' in first_line:
+                                quality_name = first_line.split(':')[0].strip()
+                                score_and_description = ':'.join(first_line.split(':')[1:]).strip()
+                                story.append(Paragraph(f"<b>{quality_name}:</b> {score_and_description}", styles['SubTitle']))
+                            else:
+                                # Если нет двоеточия, выделяем всю строку
+                                story.append(Paragraph(f"<b>{first_line}</b>", styles['SubTitle']))
+                            
                             if remaining_text:
-                                clean_text = remaining_text.replace('\n', '<br/>')
+                                # Убираем лишние пустые строки и выделяем ключевые слова
+                                clean_text = re.sub(r'\n\s*\n+', '<br/><br/>', remaining_text)
+                                clean_text = clean_text.replace('\n', '<br/>')
+                                # Выделяем уровни жирным шрифтом
+                                clean_text = re.sub(r'\b(очень высокий уровень|высокий уровень|средний уровень|низкий уровень|очень низкий уровень)\b', r'<b>\1</b>', clean_text, flags=re.IGNORECASE)
                                 story.append(Paragraph(clean_text, styles['Body']))
+                        
+                        added_qualities.add(quality)
                 
                 # Добавляем общий портрет личности
                 if "Общий портрет личности" in hexaco_sections:
                     story.append(Spacer(1, 3 * mm))
                     story.append(Paragraph("<b>Общий портрет личности:</b>", styles['SubTitle']))
                     general_text = hexaco_sections["Общий портрет личности"]
-                    # Убираем заголовок из текста
+                    # Убираем заголовок из текста и лишние пустые строки
                     clean_general = re.sub(r'^Общий портрет личности:\s*', '', general_text, flags=re.IGNORECASE).strip()
+                    clean_general = re.sub(r'\n\s*\n+', '<br/><br/>', clean_general)
                     clean_general = clean_general.replace('\n', '<br/>')
                     story.append(Paragraph(clean_general, styles['Body']))
                 
@@ -510,8 +527,9 @@ class EnhancedPDFReportV2:
                     story.append(Spacer(1, 3 * mm))
                     story.append(Paragraph("<b>Рекомендации психолога:</b>", styles['SubTitle']))
                     recommendations_text = hexaco_sections["Рекомендации психолога"]
-                    # Убираем заголовок из текста
+                    # Убираем заголовок из текста и лишние пустые строки
                     clean_recommendations = re.sub(r'^Рекомендации психолога:\s*', '', recommendations_text, flags=re.IGNORECASE).strip()
+                    clean_recommendations = re.sub(r'\n\s*\n+', '<br/><br/>', clean_recommendations)
                     clean_recommendations = clean_recommendations.replace('\n', '<br/>')
                     story.append(Paragraph(clean_recommendations, styles['Body']))
             else:

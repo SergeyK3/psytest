@@ -74,14 +74,33 @@ def parse_hexaco_sections(text: str) -> Dict[str, str]:
         
         if next_quality:
             # Ищем текст от текущего качества до следующего
-            pattern = rf"{quality}:\s*\d+.*?(?={next_quality}|Общий портрет)"
+            pattern = rf"{re.escape(quality)}:\s*\d+.*?(?={re.escape(next_quality)}|Общий портрет)"
         else:
             # Для последнего качества ищем до "Общий портрет"
-            pattern = rf"{quality}:\s*\d+.*?(?=Общий портрет|$)"
+            pattern = rf"{re.escape(quality)}:\s*\d+.*?(?=Общий портрет|$)"
             
-        match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
-        if match:
-            sections[quality] = match.group(0).strip()
+        matches = list(re.finditer(pattern, text, re.DOTALL | re.IGNORECASE))
+        if matches:
+            # Берем только первое совпадение, чтобы избежать дубликатов
+            first_match = matches[0].group(0).strip()
+            
+            # Дополнительная очистка: убираем повторные вхождения того же качества внутри секции
+            lines = first_match.split('\n')
+            cleaned_lines = []
+            quality_header_found = False
+            
+            for line in lines:
+                line = line.strip()
+                if line.startswith(f"{quality}:") and quality_header_found:
+                    # Пропускаем повторный заголовок того же качества
+                    continue
+                elif line.startswith(f"{quality}:"):
+                    quality_header_found = True
+                    cleaned_lines.append(line)
+                elif line:
+                    cleaned_lines.append(line)
+            
+            sections[quality] = '\n'.join(cleaned_lines)
     
     # Общий портрет личности
     general_match = re.search(r"Общий портрет личности:.*?(?=Рекомендации психолога|$)", text, re.DOTALL | re.IGNORECASE)

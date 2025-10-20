@@ -843,12 +843,12 @@ async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             hexaco_dict = {}
             for i, dimension in enumerate(hexaco_dimensions):
                 score = session.hexaco_scores[i]  # Оценка 1-5
-                # Конвертируем в шкалу 1-10
-                hexaco_dict[dimension] = round((score / 5.0) * 10.0, 1)
+                # Оставляем оригинальную шкалу 1-5 (без нормализации к 10 баллам)
+                hexaco_dict[dimension] = round(score, 1)
             session.hexaco_scores = hexaco_dict
         else:
             # Если данных недостаточно, используем средние значения
-            session.hexaco_scores = {dim: 5.0 for dim in hexaco_dimensions}
+            session.hexaco_scores = {dim: 3.0 for dim in hexaco_dimensions}  # Среднее для шкалы 1-5
         
         # Soft Skills: преобразуем список ответов в словарь навыков
         soft_skills_names = get_soft_skills_names()
@@ -871,9 +871,7 @@ async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 filename=f"Отчет_{session.name.replace(' ', '_')}.pdf",
                 caption=f"📊 <b>Ваш персональный отчет готов!</b>\n\n"
                        f"👤 {session.name}\n"
-                       f"📅 {datetime.now().strftime('%d.%m.%Y %H:%M')}\n\n"
-                       f"📋 Отчет содержит детальный анализ по всем методикам.\n"
-                       f"🔒 Полная версия с детализацией вопросов сохранена для специалиста.",
+                       f"📅 {datetime.now().strftime('%d.%m.%Y %H:%M')}",
                 parse_mode='HTML'
             )
         
@@ -885,11 +883,8 @@ async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                     os.unlink(pdf_path)
                 except Exception as del_err:
                     logger.warning(f"⚠️ Не удалось удалить временный PDF-файл {pdf_path}: {del_err}")
-        # Отправляем уведомление о завершении
+        # Отправляем благодарность
         await update.message.reply_text(
-            "✅ <b>Готово!</b>\n\n"
-            "📄 Ваш отчет отправлен выше.\n"
-            "💡 Сохраните его для дальнейшего использования.\n\n"
             "Спасибо за прохождение тестирования! 🎯",
             parse_mode='HTML'
         )
@@ -965,11 +960,11 @@ def generate_user_report(session: UserSession) -> tuple[str, str]:
         docs_dir.mkdir(exist_ok=True)
         
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        base_filename = f"{timestamp}_{session.name.replace(' ', '_') if session.name else 'TelegramUser'}_tg_{str(session.user_id)[-4:]}"
+        user_name_part = session.name.replace(' ', '_') if session.name else 'TelegramUser'
         
         # Пути для двух отчетов
-        pdf_path_user = docs_dir / f"{base_filename}_user.pdf"      # Для пользователя (без вопросов)
-        pdf_path_gdrive = docs_dir / f"{base_filename}_full.pdf"    # Для Google Drive (с вопросами)
+        pdf_path_user = docs_dir / f"{timestamp}_{user_name_part}.pdf"                           # Для пользователя (чистое имя)
+        pdf_path_gdrive = docs_dir / f"{timestamp}_{user_name_part}_(tg_{session.user_id})_full.pdf"    # Для Google Drive (с ID)
         
         # Нормализуем баллы к единой шкале 0-10
         paei_normalized, paei_method = ScaleNormalizer.auto_normalize("PAEI", session.paei_scores)
@@ -1072,7 +1067,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Методики: PAEI, DISC, HEXACO, Soft Skills
 • Результат: Персональный PDF отчет
 
-<b>Поддержка:</b> @your_support_contact
+<b>Поддержка:</b> @psychtestteam
     """
     
     await update.message.reply_text(help_text, parse_mode='HTML')
@@ -1097,9 +1092,11 @@ def main():
         fallbacks=[CommandHandler("cancel", cancel)],
     )
     
-    # Добавляем обработчики
-    application.add_handler(conv_handler)
+    # Добавляем обработчики команд ПЕРЕД conversation handler
     application.add_handler(CommandHandler("help", help_command))
+    
+    # Добавляем conversation handler
+    application.add_handler(conv_handler)
     
     # Запускаем бота
     logger.info("🤖 Бот запущен и готов к работе!")
