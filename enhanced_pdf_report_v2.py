@@ -281,6 +281,17 @@ class EnhancedPDFReportV2:
                     # DISC интерпретация с промптом disk_system_res.txt
                     interpretations['disc'] = ai.interpret_disc(disc_scores)
                     
+                    # ✨ НОВОЕ: Общее заключение с рекомендациями по команде с промптом general_system_res.txt
+                    all_scores = {
+                        'paei': paei_scores,
+                        'disc': disc_scores,
+                        'hexaco': hexaco_scores,
+                        'soft_skills': soft_skills_scores
+                    }
+                    general_result = ai.interpret_general_conclusion(all_scores)
+                    print("\n===== AI GENERAL INTERPRETATION WITH TEAM RECOMMENDATIONS (DEBUG) =====\n" + general_result + "\n========================================================================\n")
+                    interpretations['general'] = general_result
+                    
                     print("Динамические интерпретации сгенерированы успешно")
                     return interpretations
                     
@@ -301,7 +312,8 @@ class EnhancedPDFReportV2:
                 'paei': '',
                 'soft_skills': '',
                 'hexaco': '',
-                'disc': ''
+                'disc': '',
+                'general': ''
             }
             return interpretations
 
@@ -591,6 +603,62 @@ class EnhancedPDFReportV2:
         story.append(Paragraph(f"• (PAEI): Рассмотреть позиции, требующие качеств {paei_names.get(max_paei, max_paei)}", styles['ListWithIndent']))
         story.append(Paragraph("• (HEXACO): Планировать развитие с учетом личностного профиля HEXACO", styles['ListWithIndent']))
         story.append(Paragraph("• (DISC): Выстраивать команду с учетом комплементарных ролей по DISC", styles['ListWithIndent']))
+        story.append(Spacer(1, 2 * mm))
+
+        # 4. Рекомендации по подбору команды
+        story.append(Paragraph("<b>4. Рекомендации по подбору кандидатов в свою команду:</b>", styles['SubTitle']))
+        
+        if 'general' in ai_interpretations and ai_interpretations['general']:
+            # Ищем в общей интерпретации раздел с рекомендациями по команде
+            general_content = ai_interpretations['general']
+            
+            # Проверяем, содержит ли общая интерпретация рекомендации по команде
+            if any(keyword in general_content.lower() for keyword in ['рекомендации по подбору', 'подбор кандидатов', 'команду']):
+                # Разделяем содержимое на части для лучшего форматирования
+                lines = general_content.split('\n')
+                team_recommendations_found = False
+                
+                for line in lines:
+                    line = line.strip()
+                    if not line:
+                        continue
+                        
+                    # Ищем раздел с рекомендациями по команде
+                    if 'рекомендации по подбору' in line.lower() or 'подбор кандидатов' in line.lower():
+                        team_recommendations_found = True
+                        continue  # Пропускаем заголовок, так как мы уже добавили свой
+                    
+                    # Если мы в разделе рекомендаций по команде, добавляем содержимое
+                    if team_recommendations_found:
+                        # Проверяем, не начался ли новый раздел
+                        if any(section_marker in line.lower() for section_marker in ['общий вывод', 'заключение', 'рекомендации по профессиональному']):
+                            break
+                            
+                        # Форматируем строки с рекомендациями
+                        if line.startswith('- ') or line.startswith('• '):
+                            # Выделяем ключевые термины жирным
+                            formatted_line = line
+                            for term in ['DISC-компенсация', 'PAEI-дополнение', 'HEXACO-баланс', 'Soft Skills-синергия']:
+                                formatted_line = formatted_line.replace(term, f'<b>{term}</b>')
+                            story.append(Paragraph(formatted_line, styles['ListWithIndent']))
+                        else:
+                            # Обычный текст
+                            formatted_text = line.replace('\n', '<br/>')
+                            story.append(Paragraph(formatted_text, styles['Body']))
+                
+                # Если не нашли специальный раздел, добавляем общие рекомендации
+                if not team_recommendations_found:
+                    story.append(Paragraph("• Добавлять специалистов с высокими показателями в производительности (P) и интеграции (I) для баланса", styles['ListWithIndent']))
+                    story.append(Paragraph("• Искать кандидатов с сильными производственными и интеграционными ролями для создания полноценной управленческой команды", styles['ListWithIndent']))
+            else:
+                # Fallback рекомендации по команде
+                story.append(Paragraph("• Добавлять специалистов с высокими показателями в производительности (P) и интеграции (I) для баланса", styles['ListWithIndent']))
+                story.append(Paragraph("• Искать кандидатов с сильными производственными и интеграционными ролями для создания полноценной управленческой команды", styles['ListWithIndent']))
+        else:
+            # Fallback если нет AI интерпретации
+            story.append(Paragraph("• Добавлять специалистов с высокими показателями в производительности (P) и интеграции (I) для баланса", styles['ListWithIndent']))
+            story.append(Paragraph("• Искать кандидатов с сильными производственными и интеграционными ролями для создания полноценной управленческой команды", styles['ListWithIndent']))
+        
         story.append(Spacer(1, 6 * mm))
 
         # === РАЗДЕЛ С ДЕТАЛИЗАЦИЕЙ ВОПРОСОВ И ОТВЕТОВ (ОПЦИОНАЛЬНЫЙ) ===
@@ -625,7 +693,7 @@ class EnhancedPDFReportV2:
                                user_answers: Optional[Dict] = None) -> Tuple[Path, Optional[str]]:
         """Генерирует улучшенный PDF отчёт с детальными описаниями"""
         prepared_interpretations = dict(ai_interpretations or {})
-        expected_keys = {'paei', 'disc', 'hexaco', 'soft_skills'}
+        expected_keys = {'paei', 'disc', 'hexaco', 'soft_skills', 'general'}
         missing_keys = expected_keys - set(prepared_interpretations)
         if missing_keys:
             generated = self._generate_dynamic_interpretations(

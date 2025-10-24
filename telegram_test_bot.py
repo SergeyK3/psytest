@@ -946,6 +946,16 @@ def generate_user_report(session: UserSession) -> tuple[str, str]:
                 interpretations["disc"] = ai_interpreter.interpret_disc(session.disc_scores)
                 interpretations["hexaco"] = ai_interpreter.interpret_hexaco(session.hexaco_scores)
                 interpretations["soft_skills"] = ai_interpreter.interpret_soft_skills(session.soft_skills_scores)
+                
+                # ✨ НОВОЕ: Генерируем общее заключение с рекомендациями по команде
+                all_scores = {
+                    'paei': session.paei_scores,
+                    'disc': session.disc_scores,
+                    'hexaco': session.hexaco_scores,
+                    'soft_skills': session.soft_skills_scores
+                }
+                interpretations["general"] = ai_interpreter.interpret_general_conclusion(all_scores)
+                
             except Exception as e:
                 print(f"⚠️ Ошибка AI интерпретации: {e}")
                 # Fallback на интерпретации согласно формату general_system_res.txt
@@ -1059,8 +1069,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Помощь"""
-    help_text = """
-🤖 <b>Бот для оценки командных навыков</b>
+    help_text = """🤖 <b>Бот для оценки командных навыков</b>
 
 <b>Команды:</b>
 /start - Начать тестирование
@@ -1072,8 +1081,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Методики: PAEI, DISC, HEXACO, Soft Skills
 • Результат: Персональный PDF отчет
 
-<b>Поддержка:</b> @kimsergeiv
-    """
+<b>Поддержка:</b> @kimsergeiv"""
     
     await update.message.reply_text(help_text, parse_mode='HTML')
 
@@ -1094,7 +1102,10 @@ def main():
             HEXACO_TESTING: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_hexaco_answer)],
             SOFT_SKILLS_TESTING: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_soft_skills_answer)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[
+            CommandHandler("cancel", cancel),
+            CommandHandler("help", help_command)
+        ],
     )
     
     # Добавляем обработчики команд ПЕРЕД conversation handler
