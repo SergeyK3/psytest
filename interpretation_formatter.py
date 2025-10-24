@@ -1,38 +1,22 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Модуль для форматирования AI интерпретаций тестов HEXACO и DISC
+Модуль для форматирования интерпретаций психологических тестов
 """
 
 import re
-from typing import Dict, List
-
-
-def format_hexaco_interpretation(text: str) -> str:
-    """
-    Форматирует интерпретацию HEXACO для лучшего отображения в PDF
-    Разделяет по качествам, выделяет разделы
-    """
-    if not text or not isinstance(text, str):
-        return text
-    
-    # Не изменяем сам текст, только подготавливаем для парсинга
-    return text
-
-
-def format_disc_interpretation(text: str) -> str:
-    """
-    Форматирует интерпретацию DISC для лучшего отображения в PDF
-    Разделяет по типам поведения, выделяет разделы
-    """
-    if not text or not isinstance(text, str):
-        return text
-    
-    # Не изменяем сам текст, только подготавливаем для парсинга
-    return text
+from typing import Dict, List, Tuple, Any
 
 
 def format_ai_interpretations(interpretations: Dict[str, str]) -> Dict[str, str]:
     """
-    Форматирует все AI интерпретации для улучшенного отображения
+    Форматирует AI интерпретации для разных типов тестов
+    
+    Args:
+        interpretations: Словарь с интерпретациями {test_type: interpretation_text}
+    
+    Returns:
+        Отформатированные интерпретации
     """
     formatted = {}
     
@@ -40,117 +24,218 @@ def format_ai_interpretations(interpretations: Dict[str, str]) -> Dict[str, str]
         if test_type == 'hexaco':
             formatted[test_type] = format_hexaco_interpretation(interpretation)
         elif test_type == 'disc':
-            formatted[test_type] = format_disc_interpretation(interpretation)
-        else:
-            # Для остальных тестов применяем базовое форматирование
+            # Для DISC оставляем оригинальный формат без дополнительного форматирования
             formatted[test_type] = interpretation
+        elif test_type == 'paei':
+            # Для PAEI (Адизес) сохраняем маркдаун разметку как есть
+            formatted[test_type] = interpretation
+        else:
+            # Для других типов тестов - базовое форматирование
+            formatted[test_type] = _basic_format(interpretation)
     
     return formatted
 
 
-def parse_hexaco_sections(text: str) -> Dict[str, str]:
+def format_hexaco_interpretation(interpretation: str) -> str:
     """
-    Разбирает интерпретацию HEXACO на отдельные секции
-    Возвращает словарь с секциями для отдельного отображения
+    Форматирует интерпретацию HEXACO теста
+    
+    Args:
+        interpretation: Текст интерпретации
+    
+    Returns:
+        Отформатированный текст
+    """
+    if not interpretation:
+        return ""
+    
+    # Разбиваем на секции для каждого фактора
+    sections = parse_hexaco_sections(interpretation)
+    
+    formatted_parts = []
+    
+    for factor, content in sections.items():
+        if content.strip():
+            formatted_parts.append(f"**{factor}**")
+            formatted_parts.append(content.strip())
+            formatted_parts.append("")  # Пустая строка между секциями
+    
+    return "\n".join(formatted_parts).strip()
+
+
+def format_disc_interpretation(interpretation: str) -> str:
+    """
+    Форматирует интерпретацию DISC теста
+    
+    Args:
+        interpretation: Текст интерпретации
+    
+    Returns:
+        Отформатированный текст
+    """
+    if not interpretation:
+        return ""
+    
+    # Разбиваем на секции для каждого стиля
+    sections = parse_disc_sections(interpretation)
+    
+    formatted_parts = []
+    
+    for style, content in sections.items():
+        if content.strip():
+            formatted_parts.append(f"**{style}**")
+            formatted_parts.append(content.strip())
+            formatted_parts.append("")  # Пустая строка между секциями
+    
+    return "\n".join(formatted_parts).strip()
+
+
+def parse_hexaco_sections(interpretation: str) -> Dict[str, str]:
+    """
+    Разбирает интерпретацию HEXACO на секции по факторам
+    
+    Args:
+        interpretation: Текст интерпретации
+    
+    Returns:
+        Словарь {фактор: описание}
     """
     sections = {}
     
-    if not text or not isinstance(text, str):
-        return sections
-    
-    # Качества HEXACO
-    hexaco_qualities = [
-        "Честность-Скромность",
-        "Эмоциональность", 
-        "Экстраверсия",
-        "Добросовестность",
-        "Доброжелательность",
-        "Открытость к опыту"
+    # Список факторов HEXACO
+    factors = [
+        'Честность-Скромность',
+        'Эмоциональность', 
+        'Экстраверсия',
+        'Добросовестность',
+        'Доброжелательность',
+        'Открытость к опыту'
     ]
     
-    # Ищем каждое качество и его описание
-    for i, quality in enumerate(hexaco_qualities):
-        next_quality = hexaco_qualities[i+1] if i+1 < len(hexaco_qualities) else None
+    current_factor = None
+    current_content = []
+    
+    lines = interpretation.split('\n')
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+            
+        # Проверяем, начинается ли строка с названия фактора
+        factor_found = None
+        for factor in factors:
+            if line.startswith(factor):
+                factor_found = factor
+                break
         
-        if next_quality:
-            # Ищем текст от текущего качества до следующего
-            pattern = rf"{re.escape(quality)}:\s*\d+.*?(?={re.escape(next_quality)}|Общий портрет)"
-        else:
-            # Для последнего качества ищем до "Общий портрет"
-            pattern = rf"{re.escape(quality)}:\s*\d+.*?(?=Общий портрет|$)"
+        if factor_found:
+            # Сохраняем предыдущую секцию
+            if current_factor and current_content:
+                sections[current_factor] = '\n'.join(current_content).strip()
             
-        matches = list(re.finditer(pattern, text, re.DOTALL | re.IGNORECASE))
-        if matches:
-            # Берем только первое совпадение, чтобы избежать дубликатов
-            first_match = matches[0].group(0).strip()
-            
-            # Дополнительная очистка: убираем повторные вхождения того же качества внутри секции
-            lines = first_match.split('\n')
-            cleaned_lines = []
-            quality_header_found = False
-            
-            for line in lines:
-                line = line.strip()
-                if line.startswith(f"{quality}:") and quality_header_found:
-                    # Пропускаем повторный заголовок того же качества
-                    continue
-                elif line.startswith(f"{quality}:"):
-                    quality_header_found = True
-                    cleaned_lines.append(line)
-                elif line:
-                    cleaned_lines.append(line)
-            
-            sections[quality] = '\n'.join(cleaned_lines)
+            # Начинаем новую секцию
+            current_factor = factor_found
+            current_content = [line]
+        elif current_factor:
+            # Добавляем к текущей секции
+            current_content.append(line)
     
-    # Общий портрет личности
-    general_match = re.search(r"Общий портрет личности:.*?(?=Рекомендации психолога|$)", text, re.DOTALL | re.IGNORECASE)
-    if general_match:
-        sections["Общий портрет личности"] = general_match.group(0).strip()
-    
-    # Рекомендации психолога
-    recommendations_match = re.search(r"Рекомендации психолога:.*$", text, re.DOTALL | re.IGNORECASE)
-    if recommendations_match:
-        sections["Рекомендации психолога"] = recommendations_match.group(0).strip()
+    # Сохраняем последнюю секцию
+    if current_factor and current_content:
+        sections[current_factor] = '\n'.join(current_content).strip()
     
     return sections
 
 
-def parse_disc_sections(text: str) -> Dict[str, str]:
+def parse_disc_sections(interpretation: str) -> Dict[str, str]:
     """
-    Разбирает интерпретацию DISC на отдельные секции
+    Разбирает интерпретацию DISC на секции по стилям
+    
+    Args:
+        interpretation: Текст интерпретации
+    
+    Returns:
+        Словарь {стиль: описание}
     """
     sections = {}
     
-    if not text or not isinstance(text, str):
-        return sections
+    # Список стилей DISC (как они генерируются в interpretation_utils.py)
+    styles = ['Доминирование', 'Влияние', 'Устойчивость', 'Соответствие правилам']
     
-    # DISC типы
-    disc_types = [
-        "доминированию",
-        "влиянию",
-        "устойчивости",
-        "подчинению правилам"
-    ]
+    current_style = None
+    current_content = []
     
-    # Ищем секции по типам
-    for i, disc_type in enumerate(disc_types):
-        pattern = rf"Сумма баллов по {disc_type}.*?(?=Сумма баллов по {disc_types[i+1] if i+1 < len(disc_types) else 'Общий вывод'}|$)"
-        match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
-        if match:
-            sections[f"DISC_{disc_type.capitalize()}"] = match.group(0).strip()
+    lines = interpretation.split('\n')
     
-    # Основные разделы
-    main_sections = ["Общий вывод", "Сильные стороны", "Зоны развития", "Рекомендации психолога"]
-    
-    for i, section in enumerate(main_sections):
-        next_section = main_sections[i+1] if i+1 < len(main_sections) else None
-        if next_section:
-            pattern = rf"{section}:.*?(?={next_section}|$)"
-        else:
-            pattern = rf"{section}:.*$"
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+            
+        # Проверяем, начинается ли строка с названия стиля (с учетом **markdown**)
+        style_found = None
+        for style in styles:
+            # Проверяем разные варианты: "**Стиль:**", "Стиль:", "**Стиль**"
+            if (line.startswith(f"**{style}:**") or 
+                line.startswith(f"{style}:") or 
+                line.startswith(f"**{style}**") or
+                line.startswith(style)):
+                style_found = style
+                break
         
-        match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
-        if match:
-            sections[section] = match.group(0).strip()
+        if style_found:
+            # Сохраняем предыдущую секцию
+            if current_style and current_content:
+                sections[current_style] = '\n'.join(current_content).strip()
+            
+            # Начинаем новую секцию
+            current_style = style_found
+            current_content = [line]
+        elif current_style:
+            # Добавляем к текущей секции
+            current_content.append(line)
+    
+    # Сохраняем последнюю секцию
+    if current_style and current_content:
+        sections[current_style] = '\n'.join(current_content).strip()
     
     return sections
+
+
+def _basic_format(text: str) -> str:
+    """
+    Базовое форматирование текста
+    
+    Args:
+        text: Исходный текст
+    
+    Returns:
+        Отформатированный текст
+    """
+    if not text:
+        return ""
+    
+    # Убираем лишние пробелы и переносы
+    text = re.sub(r'\s+', ' ', text.strip())
+    
+    # Разбиваем на абзацы при точках с большой буквы
+    text = re.sub(r'\.\s+([А-ЯA-Z])', r'.\n\n\1', text)
+    
+    return text.strip()
+
+
+if __name__ == "__main__":
+    # Простой тест функций
+    test_interpretations = {
+        'hexaco': 'Честность-Скромность: 5 баллов. Высокий уровень.',
+        'disc': 'Доминирование: 4 балла. Высокий уровень лидерства.',
+        'other': 'Простой текст для форматирования.'
+    }
+    
+    formatted = format_ai_interpretations(test_interpretations)
+    
+    print("Тест форматирования:")
+    for test_type, result in formatted.items():
+        print(f"\n{test_type}:")
+        print(result)

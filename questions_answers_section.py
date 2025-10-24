@@ -533,15 +533,7 @@ class QuestionAnswerSection:
         
         # Общий заголовок раздела
         all_elements.append(Paragraph("ПРИЛОЖЕНИЕ: ДЕТАЛИЗАЦИЯ ВОПРОСОВ И ОТВЕТОВ", styles['MainTitle']))
-        all_elements.append(Spacer(1, 5*mm))
-        
-        description = """
-        <b>Назначение раздела:</b> Данный раздел предназначен для контроля и проверки корректности 
-        интерпретации результатов тестирования. Здесь представлены все заданные вопросы, 
-        выбранные ответы и методика начисления баллов.
-        """
-        all_elements.append(Paragraph(description, styles['Body']))
-        all_elements.append(Spacer(1, 6*mm))
+        all_elements.append(Spacer(1, 8*mm))
         
         # Добавляем разделы для каждого теста (если есть данные)
         if paei_answers and paei_scores:

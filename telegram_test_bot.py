@@ -65,6 +65,14 @@ class UserSession:
         self.current_test = ""
         self.current_question = 0
         self.started_at = datetime.now()
+        
+        # Простое хранение ответов для раздела с вопросами
+        self.user_answers = {
+            'paei': {},
+            'disc': {},
+            'hexaco': {},
+            'soft_skills': {}
+        }
 
 # === ФУНКЦИИ ПАРСИНГА ВОПРОСОВ ===
 
@@ -514,11 +522,8 @@ async def handle_paei_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
         # Обычная логика подсчета баллов
         session.paei_scores[answer_code] += 1
         
-        # НОВОЕ: сохраняем детальный ответ для раздела вопросов
-        # session.answers_collector.add_paei_answer(
-        #     question_index=session.current_question,
-        #     selected_option=answer_code
-        # )
+        # Сохраняем ответ для раздела с вопросами
+        session.user_answers['paei'][str(session.current_question)] = answer_code
         
         session.current_question += 1
         return await ask_paei_question(update, context)
@@ -613,11 +618,8 @@ async def handle_disc_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
         # Обычная логика добавления баллов
         session.disc_scores[category] += score
         
-        # НОВОЕ: сохраняем детальный ответ для раздела вопросов
-        # session.answers_collector.add_disc_answer(
-        #     question_index=session.current_question,
-        #     rating=score
-        # )
+        # Сохраняем ответ для раздела с вопросами
+        session.user_answers['disc'][str(session.current_question)] = score
         
         session.current_question += 1
         
@@ -670,7 +672,13 @@ async def ask_hexaco_question(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     await update.message.reply_text(
         f"🧠 <b>HEXACO - Вопрос {session.current_question + 1}/{len(HEXACO_QUESTIONS)}</b>\n\n"
-        f"{question_data['question']}",
+        f"{question_data['question']}\n\n"
+        f"📊 <i>Шкала оценки:</i>\n"
+        f"1 - Абсолютно не согласен\n"
+        f"2 - Не согласен\n"
+        f"3 - Нейтрально\n"
+        f"4 - Согласен\n"
+        f"5 - Полностью согласен",
         parse_mode='HTML',
         reply_markup=reply_markup
     )
@@ -699,11 +707,8 @@ async def handle_hexaco_answer(update: Update, context: ContextTypes.DEFAULT_TYP
             # Обычная логика сохранения
             session.hexaco_scores.append(score)
             
-            # НОВОЕ: сохраняем детальный ответ для раздела вопросов
-            # session.answers_collector.add_hexaco_answer(
-            #     question_index=session.current_question,
-            #     rating=score
-            # )
+            # Сохраняем ответ для раздела с вопросами
+            session.user_answers['hexaco'][str(session.current_question)] = score
             
             session.current_question += 1
             return await ask_hexaco_question(update, context)
@@ -790,11 +795,8 @@ async def handle_soft_skills_answer(update: Update, context: ContextTypes.DEFAUL
             # Обычная логика сохранения
             session.soft_skills_scores.append(score)
             
-            # НОВОЕ: сохраняем детальный ответ для раздела вопросов
-            # session.answers_collector.add_soft_skills_answer(
-            #     question_index=session.current_question,
-            #     rating=score
-            # )
+            # Сохраняем ответ для раздела с вопросами
+            session.user_answers['soft_skills'][str(session.current_question)] = score
             
             logger.info(f"📝 Soft Skills ответ от {user_id}: балл {score}")
             logger.info(f"📊 Текущий счет: {session.soft_skills_scores}")
@@ -817,7 +819,7 @@ async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await update.message.reply_text(
         "🎉 <b>Тестирование завершено!</b>\n\n"
         "⏳ Генерируем ваш персональный отчет...\n"
-        "Это займет несколько секунд.",
+        "Это займет несколько минут.",
         parse_mode='HTML',
         reply_markup=ReplyKeyboardRemove()
     )
@@ -858,9 +860,12 @@ async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             session.soft_skills_scores = {skill: 5.0 for skill in soft_skills_names}
         
         # Генерируем два PDF отчета в отдельном потоке
+        logger.info("🔄 Начинаем генерацию отчетов...")
         pdf_path_user, pdf_path_gdrive = await asyncio.to_thread(generate_user_report, session)
+        logger.info(f"✅ Отчеты готовы: {pdf_path_user}, {pdf_path_gdrive}")
         
         # Отправляем пользователю ТОЛЬКО его отчет (без детализации вопросов)
+        logger.info("📤 Отправляем отчет пользователю...")
         with open(pdf_path_user, 'rb') as pdf_file:
             await update.message.reply_document(
                 document=pdf_file,
@@ -870,6 +875,7 @@ async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                        f"📅 {datetime.now().strftime('%d.%m.%Y %H:%M')}",
                 parse_mode='HTML'
             )
+        logger.info("✅ Отчет успешно отправлен пользователю!")
         
         # Удаляем временные файлы безопасно
         import os
@@ -886,6 +892,8 @@ async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         )
     except Exception as e:
         logger.error(f"Ошибка генерации отчета: {e}")
+        import traceback
+        logger.error(f"Подробная ошибка: {traceback.format_exc()}")
         await update.message.reply_text(
             "❌ Произошла ошибка при генерации отчета.\n"
             "Попробуйте еще раз или обратитесь в поддержку."
@@ -905,13 +913,13 @@ def generate_user_report(session: UserSession) -> tuple[str, str]:
     
     try:
         # Всегда собираем ответы пользователя для отчета в Google Drive
-        # user_answers = session.answers_collector.get_answers_dict()
-        user_answers = {}  # Временно отключено
+        # Восстанавливаем рабочий код для раздела с вопросами
+        user_answers = session.user_answers
         
         # 🔍 ОТЛАДКА: Логируем собранные ответы
         logger.info(f"🔍 Собранные ответы пользователя:")
         for test_type, answers in user_answers.items():
-            logger.info(f"  {test_type.upper()}: {len(answers)} ответов - {dict(list(answers.items())[:3])}{'...' if len(answers) > 3 else ''}")
+            logger.info(f"  {test_type.upper()}: {len(answers)} ответов - {dict(list(answers.items())[:3]) if answers else 'пусто'}{'...' if len(answers) > 3 else ''}")
         
         # Инициализируем генератор PDF БЕЗ раздела вопросов для пользователя
         pdf_generator_user = EnhancedPDFReportV2(

@@ -410,8 +410,8 @@ class EnhancedPDFReportV2:
             story.append(Paragraph(paei_text, styles['Body']))
             story.append(Spacer(1, 2 * mm))
 
-        # Переход к детальным разделам на следующую страницу
-        story.append(PageBreak())
+        # Добавляем немного места перед следующим разделом
+        story.append(Spacer(1, 4 * mm))
 
         # === 2. SOFT SKILLS - МЯГКИЕ НАВЫКИ ===
         story.append(Paragraph("2. SOFT SKILLS - ОЦЕНКА МЯГКИХ НАВЫКОВ", styles['SectionTitle']))
@@ -560,52 +560,11 @@ class EnhancedPDFReportV2:
             self._add_chart_to_story(story, chart_paths['disc'], styles)
 
         if 'disc' in formatted_interpretations:
-            # Разбиваем DISC на секции для лучшего форматирования
-            disc_sections = parse_disc_sections(formatted_interpretations['disc'])
-            
-            if disc_sections:
-                story.append(Paragraph("<b>Интерпретация DISC:</b>", styles['SubTitle']))
-                
-                # Добавляем типы DISC по отдельности
-                disc_types = [
-                    "DISC_Доминированию",
-                    "DISC_Влиянию", 
-                    "DISC_Устойчивости",
-                    "DISC_Подчинению правилам"
-                ]
-                
-                for disc_type in disc_types:
-                    if disc_type in disc_sections:
-                        story.append(Spacer(1, 2 * mm))
-                        # Убираем префикс DISC_ для отображения и извлекаем первую строку
-                        section_text = disc_sections[disc_type]
-                        lines = section_text.split('\n')
-                        if lines:
-                            first_line = lines[0].strip()
-                            remaining_text = '\n'.join(lines[1:]).strip() if len(lines) > 1 else ""
-                            
-                            story.append(Paragraph(f"<b>{first_line}</b>", styles['SubTitle']))
-                            if remaining_text:
-                                clean_text = remaining_text.replace('\n', '<br/>')
-                                story.append(Paragraph(clean_text, styles['Body']))
-                
-                # Добавляем основные разделы
-                main_sections = ["Общий вывод", "Сильные стороны", "Зоны развития", "Рекомендации психолога"]
-                
-                for section in main_sections:
-                    if section in disc_sections:
-                        story.append(Spacer(1, 3 * mm))
-                        story.append(Paragraph(f"<b>{section}:</b>", styles['SubTitle']))
-                        section_text = disc_sections[section]
-                        # Убираем заголовок из текста
-                        clean_section = re.sub(rf'^{section}:\s*', '', section_text, flags=re.IGNORECASE).strip()
-                        clean_section = clean_section.replace('\n', '<br/>')
-                        story.append(Paragraph(clean_section, styles['Body']))
-            else:
-                # Fallback к стандартному форматированию
-                story.append(Paragraph("<b>Интерпретация:</b>", styles['SubTitle']))
-                clean_text = formatted_interpretations['disc'].replace('\n', '<br/>')
-                story.append(Paragraph(clean_text, styles['Body']))
+            story.append(Paragraph("<b>Интерпретация DISC:</b>", styles['SubTitle']))
+            # Выводим всю DISC интерпретацию целиком без разбиения на секции
+            disc_text = formatted_interpretations['disc'].replace('\n', '<br/>')
+            story.append(Paragraph(disc_text, styles['Body']))
+            story.append(Spacer(1, 2 * mm))
         story.append(Spacer(1, 2 * mm))
 
         # === РЕКОМЕНДАЦИИ ПО ПРОФЕССИОНАЛЬНОМУ РАЗВИТИЮ (В КОНЦЕ ОТЧЕТА) ===
