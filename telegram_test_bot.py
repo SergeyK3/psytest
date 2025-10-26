@@ -19,8 +19,8 @@ import re
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler, CallbackQueryHandler
 
 # Загружаем переменные окружения
 load_dotenv()
@@ -427,8 +427,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 Готовы начать?
     """
     
-    keyboard = [["✅ Да, начать тестирование"], ["❌ Нет, не сейчас"]]
-    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    keyboard = [
+        [InlineKeyboardButton("✅ Да, начать тестирование", callback_data="start_yes")],
+        [InlineKeyboardButton("❌ Нет, не сейчас", callback_data="start_no")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.message.reply_text(
         welcome_text, 
@@ -439,21 +442,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return WAITING_START
 
 async def handle_start_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Обработка подтверждения начала"""
-    text = update.message.text
+    """Обработка подтверждения начала через inline кнопки"""
+    query = update.callback_query
+    await query.answer()
     
-    if "Да" in text:
-        await update.message.reply_text(
+    if query.data == "start_yes":
+        await query.edit_message_text(
             "📝 Отлично! Давайте начнем с регистрации.\n\n"
             "Пожалуйста, введите ваши <b>Фамилию и Имя</b>:",
-            parse_mode='HTML',
-            reply_markup=ReplyKeyboardRemove()
+            parse_mode='HTML'
         )
         return WAITING_NAME
     else:
-        await update.message.reply_text(
-            "Хорошо! Когда будете готовы, напишите /start",
-            reply_markup=ReplyKeyboardRemove()
+        await query.edit_message_text(
+            "Хорошо! Когда будете готовы, напишите /start"
         )
         return ConversationHandler.END
 
@@ -469,8 +471,7 @@ async def handle_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
     await update.message.reply_text(
         f"👋 Приветствую, <b>{name}</b>! Сейчас начнём тестирование.\n",
-        parse_mode='HTML',
-        reply_markup=ReplyKeyboardRemove()
+        parse_mode='HTML'
     )
     return await start_paei_test(update, context)
 
@@ -493,43 +494,72 @@ async def ask_paei_question(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     
     question_data = PAEI_QUESTIONS[session.current_question]
     
-    # Формируем клавиатуру с вариантами ответов
+    # Формируем inline клавиатуру с короткими кнопками (только буквы)
     keyboard = []
-    for key, answer in question_data["answers"].items():
-        keyboard.append([f"{key}. {answer}"])
+    for key in ["P", "A", "E", "I"]:
+        if key in question_data["answers"]:
+            keyboard.append([InlineKeyboardButton(f"{key}", callback_data=f"paei_{key}")])
     
-    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await update.message.reply_text(
-        f"📊 <b>PAEI - Вопрос {session.current_question + 1}/{len(PAEI_QUESTIONS)}</b>\n\n"
-        f"{question_data['question']}",
-        parse_mode='HTML',
-        reply_markup=reply_markup
-    )
+    # Формируем полный текст с вариантами ответов
+    question_text = f"📊 <b>PAEI - Вопрос {session.current_question + 1}/{len(PAEI_QUESTIONS)}</b>\n\n"
+    question_text += f"<b>{question_data['question']}</b>\n\n"
+    
+    # Добавляем все варианты ответов в текст
+    for key in ["P", "A", "E", "I"]:
+        if key in question_data["answers"]:
+            question_text += f"<b>{key}.</b> {question_data['answers'][key]}\n\n"
+    
+    question_text += "👆 <i>Выберите вариант ответа</i>"
+    
+    # Определяем откуда пришел запрос
+    if hasattr(update, 'message') and update.message:
+        # Обычное сообщение
+        await update.message.reply_text(
+            question_text,
+            parse_mode='HTML',
+            reply_markup=reply_markup
+        )
+    else:
+        # Callback query или другой тип обновления
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=question_text,
+            parse_mode='HTML',
+            reply_markup=reply_markup
+        )
     
     return PAEI_TESTING
 
 async def handle_paei_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Обрабатывает ответ PAEI"""
+    """Обрабатывает ответ PAEI через inline кнопки"""
+    query = update.callback_query
+    await query.answer()
+    
     user_id = update.effective_user.id
     session = user_sessions[user_id]
-    answer_text = update.message.text
     
-    # Извлекаем код ответа (P, A, E, I)
-    answer_code = answer_text[0] if answer_text else ""
+    # Извлекаем код ответа из callback_data (например, "paei_P" -> "P")
+    if query.data.startswith("paei_"):
+        answer_code = query.data.split("_")[1]
+        
+        if answer_code in ["P", "A", "E", "I"]:
+            # Обычная логика подсчета баллов
+            session.paei_scores[answer_code] += 1
+            
+            # Сохраняем ответ для раздела с вопросами
+            session.user_answers['paei'][str(session.current_question)] = answer_code
+            
+            session.current_question += 1
+            
+            # Удаляем кнопки у предыдущего сообщения
+            await query.edit_message_reply_markup(reply_markup=None)
+            
+            return await ask_paei_question(update, context)
     
-    if answer_code in ["P", "A", "E", "I"]:
-        # Обычная логика подсчета баллов
-        session.paei_scores[answer_code] += 1
-        
-        # Сохраняем ответ для раздела с вопросами
-        session.user_answers['paei'][str(session.current_question)] = answer_code
-        
-        session.current_question += 1
-        return await ask_paei_question(update, context)
-    else:
-        await update.message.reply_text("❗ Пожалуйста, выберите один из предложенных вариантов")
-        return PAEI_TESTING
+    await query.edit_message_text("❗ Пожалуйста, выберите один из предложенных вариантов")
+    return PAEI_TESTING
 
 async def start_disc_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Начинает тест DISC"""
@@ -538,12 +568,24 @@ async def start_disc_test(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     session.current_test = "DISC"
     session.current_question = 0
     
-    await update.message.reply_text(
-        f"✅ <b>PAEI завершен!</b>\n\n"
-        f"🎭 Переходим к тесту DISC (поведенческие стили)\n"
-        f"Вопрос 1 из {len(DISC_QUESTIONS)}:",
-        parse_mode='HTML'
-    )
+    # Определяем откуда пришел запрос и отправляем сообщение
+    if hasattr(update, 'message') and update.message:
+        # Обычное сообщение
+        await update.message.reply_text(
+            f"✅ <b>PAEI завершен!</b>\n\n"
+            f"🎭 Переходим к тесту DISC (поведенческие стили)\n"
+            f"Вопрос 1 из {len(DISC_QUESTIONS)}:",
+            parse_mode='HTML'
+        )
+    else:
+        # Callback query или другой тип обновления
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=f"✅ <b>PAEI завершен!</b>\n\n"
+                 f"🎭 Переходим к тесту DISC (поведенческие стили)\n"
+                 f"Вопрос 1 из {len(DISC_QUESTIONS)}:",
+            parse_mode='HTML'
+        )
     
     return await ask_disc_question(update, context)
 
@@ -565,76 +607,77 @@ async def ask_disc_question(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     
     question_data = DISC_QUESTIONS[session.current_question]
     
-    # Создаем клавиатуру для шкалы 1-5
+    # Создаем inline клавиатуру для шкалы 1-5
     keyboard = [
-        ["1 - Совсем не согласен"],
-        ["2 - Не согласен"],
-        ["3 - Нейтрально"],
-        ["4 - Согласен"],
-        ["5 - Полностью согласен"],
-        ["❌ Выйти"]
+        [InlineKeyboardButton("1 - Совсем не согласен", callback_data="disc_1")],
+        [InlineKeyboardButton("2 - Не согласен", callback_data="disc_2")],
+        [InlineKeyboardButton("3 - Нейтрально", callback_data="disc_3")],
+        [InlineKeyboardButton("4 - Согласен", callback_data="disc_4")],
+        [InlineKeyboardButton("5 - Полностью согласен", callback_data="disc_5")]
     ]
     
-    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    reply_markup = InlineKeyboardMarkup(keyboard)
     
     logger.info(f"❓ Отправляем DISC вопрос {session.current_question + 1}/{len(DISC_QUESTIONS)}")
     
-    # Удаляем устаревшую инструкцию для DISC
-    await update.message.reply_text(
-        f"💼 <b>DISC - Вопрос {session.current_question + 1}/{len(DISC_QUESTIONS)}</b>\n\n"
-        f"{question_data['question']}",
-        parse_mode='HTML',
-        reply_markup=reply_markup
-    )
+    # Определяем откуда пришел запрос
+    if hasattr(update, 'message') and update.message:
+        # Обычное сообщение
+        await update.message.reply_text(
+            f"💼 <b>DISC - Вопрос {session.current_question + 1}/{len(DISC_QUESTIONS)}</b>\n\n"
+            f"{question_data['question']}",
+            parse_mode='HTML',
+            reply_markup=reply_markup
+        )
+    else:
+        # Callback query или другой тип обновления
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=f"💼 <b>DISC - Вопрос {session.current_question + 1}/{len(DISC_QUESTIONS)}</b>\n\n"
+                 f"{question_data['question']}",
+            parse_mode='HTML',
+            reply_markup=reply_markup
+        )
     return DISC_TESTING
 
 async def handle_disc_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Обрабатывает ответ DISC (шкала 1-5)"""
+    """Обрабатывает ответ DISC через inline кнопки"""
+    query = update.callback_query
+    await query.answer()
+    
     user_id = update.effective_user.id
     session = user_sessions[user_id]
-    answer_text = update.message.text
     
-    # Проверяем на команду выхода
-    if answer_text and ("❌" in answer_text or answer_text.lower() in ["/exit", "/cancel", "выйти", "отмена"]):
-        return await cancel(update, context)
+    # Извлекаем балл из callback_data (например, "disc_3" -> 3)
+    if query.data.startswith("disc_"):
+        try:
+            score = int(query.data.split("_")[1])
+            
+            if 1 <= score <= 5:
+                # Получаем данные текущего вопроса
+                question_data = DISC_QUESTIONS[session.current_question]
+                category = question_data['category']  # D, I, S, C
+                
+                # Обычная логика добавления баллов
+                session.disc_scores[category] += score
+                
+                # Сохраняем ответ для раздела с вопросами
+                session.user_answers['disc'][str(session.current_question)] = score
+                
+                session.current_question += 1
+                
+                logger.info(f"✅ DISC ответ принят. Категория: {category}, Балл: {score}")
+                logger.info(f"📈 Счет DISC: {session.disc_scores}")
+                
+                # Удаляем кнопки у предыдущего сообщения
+                await query.edit_message_reply_markup(reply_markup=None)
+                
+                return await ask_disc_question(update, context)
+        except (ValueError, IndexError):
+            pass
     
-    # Добавляем подробное логирование
-    logger.info(f"📝 DISC ответ от {user_id}: '{answer_text}'")
-    logger.info(f"📊 Текущий вопрос: {session.current_question + 1}/{len(DISC_QUESTIONS)}")
-    
-    # Извлекаем число от 1 до 5 из ответа
-    score = None
-    if answer_text and len(answer_text) > 0:
-        if answer_text[0].isdigit():
-            score = int(answer_text[0])
-    
-    logger.info(f"� Балл: {score}")
-    
-    if score and 1 <= score <= 5:
-        # Получаем данные текущего вопроса
-        question_data = DISC_QUESTIONS[session.current_question]
-        category = question_data['category']  # D, I, S, C
-        
-        # Обычная логика добавления баллов
-        session.disc_scores[category] += score
-        
-        # Сохраняем ответ для раздела с вопросами
-        session.user_answers['disc'][str(session.current_question)] = score
-        
-        session.current_question += 1
-        
-        logger.info(f"✅ Ответ принят. Категория: {category}, Балл: {score}")
-        logger.info(f"✅ Новый current_question: {session.current_question}")
-        logger.info(f"📈 Счет DISC: {session.disc_scores}")
-        
-        if session.current_question >= len(DISC_QUESTIONS):
-            logger.info(f"🎯 DISC завершен! Переходим к HEXACO")
-        
-        return await ask_disc_question(update, context)
-    else:
-        logger.warning(f"❌ Неверный ответ DISC: '{answer_text}' -> балл: {score}")
-        await update.message.reply_text("❗ Пожалуйста, выберите оценку от 1 до 5")
-        return DISC_TESTING
+    await query.edit_message_text("❗ Пожалуйста, выберите оценку от 1 до 5")
+    return DISC_TESTING
 
 async def start_hexaco_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Начинает тест HEXACO"""
@@ -647,11 +690,22 @@ async def start_hexaco_test(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     session.current_test = "HEXACO"
     session.current_question = 0
     
-    await update.message.reply_text(
-        "🧠 <b>Начинаем тест HEXACO</b>\n\n"
-        "Выберите наиболее предпочтительный для вас ответ:",
-        parse_mode='HTML'
-    )
+    # Определяем откуда пришел запрос и отправляем сообщение
+    if hasattr(update, 'message') and update.message:
+        # Обычное сообщение
+        await update.message.reply_text(
+            "🧠 <b>Начинаем тест HEXACO</b>\n\n"
+            "Выберите наиболее предпочтительный для вас ответ:",
+            parse_mode='HTML'
+        )
+    else:
+        # Callback query или другой тип обновления
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="🧠 <b>Начинаем тест HEXACO</b>\n\n"
+                 "Выберите наиболее предпочтительный для вас ответ:",
+            parse_mode='HTML'
+        )
     logger.info(f"📝 Переходим к первому вопросу HEXACO")
     return await ask_hexaco_question(update, context)
 
@@ -666,58 +720,80 @@ async def ask_hexaco_question(update: Update, context: ContextTypes.DEFAULT_TYPE
     question_data = HEXACO_QUESTIONS[session.current_question]
     
     keyboard = [
-        ["1", "2", "3", "4", "5"]
+        [
+            InlineKeyboardButton("1", callback_data="hexaco_1"),
+            InlineKeyboardButton("2", callback_data="hexaco_2"),
+            InlineKeyboardButton("3", callback_data="hexaco_3"),
+            InlineKeyboardButton("4", callback_data="hexaco_4"),
+            InlineKeyboardButton("5", callback_data="hexaco_5")
+        ]
     ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await update.message.reply_text(
-        f"🧠 <b>HEXACO - Вопрос {session.current_question + 1}/{len(HEXACO_QUESTIONS)}</b>\n\n"
-        f"{question_data['question']}\n\n"
-        f"📊 <i>Шкала оценки:</i>\n"
-        f"1 - Абсолютно не согласен\n"
-        f"2 - Не согласен\n"
-        f"3 - Нейтрально\n"
-        f"4 - Согласен\n"
-        f"5 - Полностью согласен",
-        parse_mode='HTML',
-        reply_markup=reply_markup
-    )
+    # Определяем откуда пришел запрос
+    if hasattr(update, 'message') and update.message:
+        # Обычное сообщение
+        await update.message.reply_text(
+            f"🧠 <b>HEXACO - Вопрос {session.current_question + 1}/{len(HEXACO_QUESTIONS)}</b>\n\n"
+            f"{question_data['question']}\n\n"
+            f"📊 <i>Шкала оценки:</i>\n"
+            f"1 - Абсолютно не согласен\n"
+            f"2 - Не согласен\n"
+            f"3 - Нейтрально\n"
+            f"4 - Согласен\n"
+            f"5 - Полностью согласен",
+            parse_mode='HTML',
+            reply_markup=reply_markup
+        )
+    else:
+        # Callback query или другой тип обновления
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=f"🧠 <b>HEXACO - Вопрос {session.current_question + 1}/{len(HEXACO_QUESTIONS)}</b>\n\n"
+                 f"{question_data['question']}\n\n"
+                 f"📊 <i>Шкала оценки:</i>\n"
+                 f"1 - Абсолютно не согласен\n"
+                 f"2 - Не согласен\n"
+                 f"3 - Нейтрально\n"
+                 f"4 - Согласен\n"
+                 f"5 - Полностью согласен",
+            parse_mode='HTML',
+            reply_markup=reply_markup
+        )
     
     return HEXACO_TESTING
 
 async def handle_hexaco_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Обрабатывает ответ HEXACO"""
+    """Обрабатывает ответ HEXACO через inline кнопки"""
+    query = update.callback_query
+    await query.answer()
+    
     user_id = update.effective_user.id
     session = user_sessions[user_id]
-    answer_text = update.message.text
     
-    # Проверяем на выход
-    if answer_text == "❌ Выйти":
-        return await cancel(update, context)
-    
-    # Извлекаем числовой ответ (1-5)
-    try:
-        score = None
-        for i in range(1, 6):  # Проверяем цифры 1-5
-            if answer_text.startswith(str(i)):
-                score = i
-                break
+    # Извлекаем балл из callback_data (например, "hexaco_3" -> 3)
+    if query.data.startswith("hexaco_"):
+        try:
+            score = int(query.data.split("_")[1])
+            
+            if 1 <= score <= 5:
+                # Обычная логика сохранения
+                session.hexaco_scores.append(score)
                 
-        if score is not None:
-            # Обычная логика сохранения
-            session.hexaco_scores.append(score)
-            
-            # Сохраняем ответ для раздела с вопросами
-            session.user_answers['hexaco'][str(session.current_question)] = score
-            
-            session.current_question += 1
-            return await ask_hexaco_question(update, context)
-        else:
-            raise ValueError("Неверный формат ответа")
-            
-    except (ValueError, IndexError):
-        await update.message.reply_text("❗ Пожалуйста, выберите один из предложенных вариантов (1-5)")
-        return HEXACO_TESTING
+                # Сохраняем ответ для раздела с вопросами
+                session.user_answers['hexaco'][str(session.current_question)] = score
+                
+                session.current_question += 1
+                
+                # Удаляем кнопки у предыдущего сообщения
+                await query.edit_message_reply_markup(reply_markup=None)
+                
+                return await ask_hexaco_question(update, context)
+        except (ValueError, IndexError):
+            pass
+    
+    await query.edit_message_text("❗ Пожалуйста, выберите один из предложенных вариантов (1-5)")
+    return HEXACO_TESTING
 
 async def start_soft_skills_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Начинает тест Soft Skills"""
@@ -726,11 +802,22 @@ async def start_soft_skills_test(update: Update, context: ContextTypes.DEFAULT_T
     session.current_test = "SOFT_SKILLS"
     session.current_question = 0
     
-    await update.message.reply_text(
-        "💪 <b>Начинаем тест Soft Skills</b>\n\n"
-        "Выберите наиболее предпочтительный для вас ответ:",
-        parse_mode='HTML'
-    )
+    # Определяем откуда пришел запрос и отправляем сообщение
+    if hasattr(update, 'message') and update.message:
+        # Обычное сообщение
+        await update.message.reply_text(
+            "💪 <b>Начинаем тест Soft Skills</b>\n\n"
+            "Выберите наиболее предпочтительный для вас ответ:",
+            parse_mode='HTML'
+        )
+    else:
+        # Callback query или другой тип обновления
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="💪 <b>Начинаем тест Soft Skills</b>\n\n"
+                 "Выберите наиболее предпочтительный для вас ответ:",
+            parse_mode='HTML'
+        )
     
     return await ask_soft_skills_question(update, context)
 
@@ -744,85 +831,130 @@ async def ask_soft_skills_question(update: Update, context: ContextTypes.DEFAULT
     
     question_data = SOFT_SKILLS_QUESTIONS[session.current_question]
     
-    # Создаем клавиатуру с вариантами ответов из файла или базовую шкалу 1-5
+    # Создаем inline клавиатуру только с цифрами
     keyboard = []
     if 'answers' in question_data and question_data['answers']:
-        # Используем варианты ответов из файла
-        for answer in question_data['answers']:
-            keyboard.append([f"{answer['value']}. {answer['text']}"])
+        # Используем варианты ответов из файла - показываем только цифры в кнопках
+        keyboard = [
+            [
+                InlineKeyboardButton("1", callback_data="soft_1"),
+                InlineKeyboardButton("2", callback_data="soft_2"),
+                InlineKeyboardButton("3", callback_data="soft_3"),
+                InlineKeyboardButton("4", callback_data="soft_4"),
+                InlineKeyboardButton("5", callback_data="soft_5")
+            ]
+        ]
     else:
         # Используем базовую шкалу 1-5
         keyboard = [
-            ["1", "2", "3", "4", "5"]
+            [
+                InlineKeyboardButton("1", callback_data="soft_1"),
+                InlineKeyboardButton("2", callback_data="soft_2"),
+                InlineKeyboardButton("3", callback_data="soft_3"),
+                InlineKeyboardButton("4", callback_data="soft_4"),
+                InlineKeyboardButton("5", callback_data="soft_5")
+            ]
         ]
     
-    # Добавляем кнопку выхода
-    keyboard.append(["❌ Выйти"])
-    
-    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    reply_markup = InlineKeyboardMarkup(keyboard)
     
     skill_info = f" ({question_data['skill']})" if 'skill' in question_data else ""
     
-    await update.message.reply_text(
-        f"💪 <b>Soft Skills - Вопрос {session.current_question + 1}/{len(SOFT_SKILLS_QUESTIONS)}</b>{skill_info}\n\n"
-        f"{question_data['question']}",
-        parse_mode='HTML',
-        reply_markup=reply_markup
-    )
+    # Формируем полный текст с вариантами ответов
+    question_text = f"💪 <b>Soft Skills - Вопрос {session.current_question + 1}/{len(SOFT_SKILLS_QUESTIONS)}</b>{skill_info}\n\n"
+    question_text += f"<b>{question_data['question']}</b>\n\n"
+    
+    # Добавляем все варианты ответов в текст
+    if 'answers' in question_data and question_data['answers']:
+        for answer in question_data['answers']:
+            question_text += f"<b>{answer['value']}.</b> {answer['text']}\n\n"
+    else:
+        # Базовая шкала
+        question_text += "<b>1.</b> Совсем не согласен\n"
+        question_text += "<b>2.</b> Не согласен\n"
+        question_text += "<b>3.</b> Нейтрально\n"
+        question_text += "<b>4.</b> Согласен\n"
+        question_text += "<b>5.</b> Полностью согласен\n\n"
+    
+    question_text += "👆 <i>Выберите вариант ответа</i>"
+    
+    # Определяем откуда пришел запрос
+    if hasattr(update, 'message') and update.message:
+        # Обычное сообщение
+        await update.message.reply_text(
+            question_text,
+            parse_mode='HTML',
+            reply_markup=reply_markup
+        )
+    else:
+        # Callback query или другой тип обновления
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=question_text,
+            parse_mode='HTML',
+            reply_markup=reply_markup
+        )
     
     return SOFT_SKILLS_TESTING
 
 async def handle_soft_skills_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Обрабатывает ответ Soft Skills"""
+    """Обрабатывает ответ Soft Skills через inline кнопки"""
+    query = update.callback_query
+    await query.answer()
+    
     user_id = update.effective_user.id
     session = user_sessions[user_id]
-    answer_text = update.message.text
     
-    # Проверяем на выход
-    if answer_text and ("❌" in answer_text or answer_text.lower() in ["/exit", "/cancel", "выйти", "отмена"]):
-        return await cancel(update, context)
+    # Извлекаем балл из callback_data (например, "soft_3" -> 3)
+    if query.data.startswith("soft_"):
+        try:
+            score = int(query.data.split("_")[1])
+            
+            if 1 <= score <= 5:
+                # Обычная логика сохранения
+                session.soft_skills_scores.append(score)
+                
+                # Сохраняем ответ для раздела с вопросами
+                session.user_answers['soft_skills'][str(session.current_question)] = score
+                
+                logger.info(f"📝 Soft Skills ответ от {user_id}: балл {score}")
+                logger.info(f"📊 Текущий счет: {session.soft_skills_scores}")
+                
+                session.current_question += 1
+                
+                # Удаляем кнопки у предыдущего сообщения
+                await query.edit_message_reply_markup(reply_markup=None)
+                
+                return await ask_soft_skills_question(update, context)
+        except (ValueError, IndexError):
+            pass
     
-    # Извлекаем числовой ответ (1-5)
-    try:
-        score = None
-        
-        # Сначала проверяем ответы в формате "1. Текст ответа"
-        if answer_text and answer_text[0].isdigit():
-            score = int(answer_text[0])
-        
-        # Проверяем диапазон 1-5
-        if score and 1 <= score <= 5:
-            # Обычная логика сохранения
-            session.soft_skills_scores.append(score)
-            
-            # Сохраняем ответ для раздела с вопросами
-            session.user_answers['soft_skills'][str(session.current_question)] = score
-            
-            logger.info(f"📝 Soft Skills ответ от {user_id}: балл {score}")
-            logger.info(f"📊 Текущий счет: {session.soft_skills_scores}")
-            
-            session.current_question += 1
-            return await ask_soft_skills_question(update, context)
-        else:
-            raise ValueError("Неверный диапазон ответа")
-            
-    except (ValueError, IndexError):
-        logger.warning(f"❌ Неверный ответ Soft Skills: '{answer_text}'")
-        await update.message.reply_text("❗ Пожалуйста, выберите один из предложенных вариантов (1-5)")
-        return SOFT_SKILLS_TESTING
+    await query.edit_message_text("❗ Пожалуйста, выберите один из предложенных вариантов (1-5)")
+    return SOFT_SKILLS_TESTING
 
 async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Завершает тестирование и генерирует отчет"""
     user_id = update.effective_user.id
     session = user_sessions[user_id]
     
-    await update.message.reply_text(
-        "🎉 <b>Тестирование завершено!</b>\n\n"
-        "⏳ Генерируем ваш персональный отчет...\n"
-        "Это займет несколько минут.",
-        parse_mode='HTML',
-        reply_markup=ReplyKeyboardRemove()
-    )
+    # Определяем откуда пришел запрос и отправляем сообщение
+    if hasattr(update, 'message') and update.message:
+        # Обычное сообщение
+        await update.message.reply_text(
+            "🎉 <b>Тестирование завершено!</b>\n\n"
+            "⏳ Генерируем ваш персональный отчет...\n"
+            "Это займет несколько минут.",
+            parse_mode='HTML'
+        )
+    else:
+        # Callback query или другой тип обновления
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="🎉 <b>Тестирование завершено!</b>\n\n"
+                 "⏳ Генерируем ваш персональный отчет...\n"
+                 "Это займет несколько минут.",
+            parse_mode='HTML'
+        )
     
     try:
         # Обработка результатов по методикам
@@ -867,14 +999,28 @@ async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         # Отправляем пользователю ТОЛЬКО его отчет (без детализации вопросов)
         logger.info("📤 Отправляем отчет пользователю...")
         with open(pdf_path_user, 'rb') as pdf_file:
-            await update.message.reply_document(
-                document=pdf_file,
-                filename=f"Отчет_{session.name.replace(' ', '_')}.pdf",
-                caption=f"📊 <b>Ваш персональный отчет готов!</b>\n\n"
-                       f"👤 {session.name}\n"
-                       f"📅 {datetime.now().strftime('%d.%m.%Y %H:%M')}",
-                parse_mode='HTML'
-            )
+            # Определяем способ отправки документа
+            if hasattr(update, 'message') and update.message:
+                # Обычное сообщение
+                await update.message.reply_document(
+                    document=pdf_file,
+                    filename=f"Отчет_{session.name.replace(' ', '_')}.pdf",
+                    caption=f"📊 <b>Ваш персональный отчет готов!</b>\n\n"
+                           f"👤 {session.name}\n"
+                           f"📅 {datetime.now().strftime('%d.%m.%Y %H:%M')}",
+                    parse_mode='HTML'
+                )
+            else:
+                # Callback query или другой тип обновления
+                await context.bot.send_document(
+                    chat_id=user_id,
+                    document=pdf_file,
+                    filename=f"Отчет_{session.name.replace(' ', '_')}.pdf",
+                    caption=f"📊 <b>Ваш персональный отчет готов!</b>\n\n"
+                           f"👤 {session.name}\n"
+                           f"📅 {datetime.now().strftime('%d.%m.%Y %H:%M')}",
+                    parse_mode='HTML'
+                )
         logger.info("✅ Отчет успешно отправлен пользователю!")
         
         # Удаляем временные файлы безопасно
@@ -886,18 +1032,38 @@ async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 except Exception as del_err:
                     logger.warning(f"⚠️ Не удалось удалить временный PDF-файл {pdf_path}: {del_err}")
         # Отправляем благодарность
-        await update.message.reply_text(
-            "Спасибо за прохождение тестирования! 🎯",
-            parse_mode='HTML'
-        )
+        if hasattr(update, 'message') and update.message:
+            # Обычное сообщение
+            await update.message.reply_text(
+                "Спасибо за прохождение тестирования! 🎯",
+                parse_mode='HTML'
+            )
+        else:
+            # Callback query или другой тип обновления
+            await context.bot.send_message(
+                chat_id=user_id,
+                text="Спасибо за прохождение тестирования! 🎯",
+                parse_mode='HTML'
+            )
     except Exception as e:
         logger.error(f"Ошибка генерации отчета: {e}")
         import traceback
         logger.error(f"Подробная ошибка: {traceback.format_exc()}")
-        await update.message.reply_text(
-            "❌ Произошла ошибка при генерации отчета.\n"
-            "Попробуйте еще раз или обратитесь в поддержку."
-        )
+        
+        # Отправляем сообщение об ошибке
+        if hasattr(update, 'message') and update.message:
+            # Обычное сообщение
+            await update.message.reply_text(
+                "❌ Произошла ошибка при генерации отчета.\n"
+                "Попробуйте еще раз или обратитесь в поддержку."
+            )
+        else:
+            # Callback query или другой тип обновления
+            await context.bot.send_message(
+                chat_id=user_id,
+                text="❌ Произошла ошибка при генерации отчета.\n"
+                     "Попробуйте еще раз или обратитесь в поддержку."
+            )
     # Очищаем сессию
     if user_id in user_sessions:
         del user_sessions[user_id]
@@ -1061,8 +1227,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     
     await update.message.reply_text(
         "❌ Тестирование отменено.\n\n"
-        "Чтобы начать заново, напишите /start",
-        reply_markup=ReplyKeyboardRemove()
+        "Чтобы начать заново, напишите /start"
     )
     
     return ConversationHandler.END
@@ -1095,12 +1260,12 @@ def main():
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
-            WAITING_START: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_start_confirmation)],
+            WAITING_START: [CallbackQueryHandler(handle_start_confirmation)],
             WAITING_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_name)],
-            PAEI_TESTING: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_paei_answer)],
-            DISC_TESTING: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_disc_answer)],
-            HEXACO_TESTING: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_hexaco_answer)],
-            SOFT_SKILLS_TESTING: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_soft_skills_answer)],
+            PAEI_TESTING: [CallbackQueryHandler(handle_paei_answer)],
+            DISC_TESTING: [CallbackQueryHandler(handle_disc_answer)],
+            HEXACO_TESTING: [CallbackQueryHandler(handle_hexaco_answer)],
+            SOFT_SKILLS_TESTING: [CallbackQueryHandler(handle_soft_skills_answer)],
         },
         fallbacks=[
             CommandHandler("cancel", cancel),
