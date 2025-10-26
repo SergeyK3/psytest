@@ -1,0 +1,46 @@
+[Unit]
+Description=Psychology Test Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=sergei
+Group=sergei
+WorkingDirectory=/home/sergei/MyApps/PsychTest
+Environment=PYTHONPATH=/home/sergei/MyApps/PsychTest
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/sergei/MyApps/PsychTest/.venv/bin/python3 /home/sergei/MyApps/PsychTest/telegram_test_bot.py
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Политики перезапуска
+Restart=always
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=600
+
+# Ограничения безопасности
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/sergei/MyApps/PsychTest
+ProtectHome=read-only
+
+# Ограничения ресурсов
+MemoryMax=1G
+CPUQuota=50%
+TasksMax=100
+
+# Логирование
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=psychtest-bot
+
+# PID файл для контроля единственного экземпляра
+PIDFile=/home/sergei/MyApps/PsychTest/psychtest-bot.pid
+
+# Таймауты
+TimeoutStartSec=60
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
