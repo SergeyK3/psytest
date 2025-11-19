@@ -429,7 +429,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     
     keyboard = [
         [InlineKeyboardButton("✅ Да, начать тестирование", callback_data="start_yes")],
-        [InlineKeyboardButton("❌ Нет, не сейчас", callback_data="start_no")]
+        [InlineKeyboardButton("❌ Нет, не сейчас", callback_data="start_no")],
+        [InlineKeyboardButton("❌ Отменить текущую операцию", callback_data="cancel")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -494,12 +495,13 @@ async def ask_paei_question(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     
     question_data = PAEI_QUESTIONS[session.current_question]
     
-    # Формируем inline клавиатуру с короткими кнопками (только буквы)
-    keyboard = []
-    for key in ["P", "A", "E", "I"]:
-        if key in question_data["answers"]:
-            keyboard.append([InlineKeyboardButton(f"{key}", callback_data=f"paei_{key}")])
-    
+    # Формируем inline клавиатуру с короткими кнопками (только буквы, горизонтально)
+    keyboard = [[
+        InlineKeyboardButton("P", callback_data="paei_P"),
+        InlineKeyboardButton("A", callback_data="paei_A"),
+        InlineKeyboardButton("E", callback_data="paei_E"),
+        InlineKeyboardButton("I", callback_data="paei_I")
+    ]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     # Формируем полный текст с вариантами ответов
