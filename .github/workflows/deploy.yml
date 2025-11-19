@@ -43,3 +43,4 @@ jobs:
           ssh -o StrictHostKeyChecking=no ${SSH_USER}@${SSH_HOST} "mkdir -p ${APP_DIR}"
           scp -o StrictHostKeyChecking=no ./deploy.sh ${SSH_USER}@${SSH_HOST}:${APP_DIR}/deploy.sh
           ssh -o StrictHostKeyChecking=no ${SSH_USER}@${SSH_HOST} "chmod +x ${APP_DIR}/deploy.sh && sudo ${APP_DIR}/deploy.sh"
+
