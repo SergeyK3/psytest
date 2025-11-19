@@ -505,8 +505,7 @@ async def ask_paei_question(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     # Формируем текст вопроса
     question_text = f"📊 <b>PAEI - Вопрос {session.current_question + 1}/{len(PAEI_QUESTIONS)}</b>\n\n"
-    question_text += f"<b>{question_data['question']}</b>\n\n"
-    question_text += "👆 <i>Выберите вариант ответа</i>"
+    question_text += f"<b>{question_data['question']}</b>"
     
     # Определяем откуда пришел запрос
     if hasattr(update, 'message') and update.message:
@@ -531,28 +530,36 @@ async def handle_paei_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     """Обрабатывает ответ PAEI через inline кнопки"""
     query = update.callback_query
     await query.answer()
-    
+
     user_id = update.effective_user.id
     session = user_sessions[user_id]
-    
+
     # Извлекаем код ответа из callback_data (например, "paei_P" -> "P")
     if query.data.startswith("paei_"):
         answer_code = query.data.split("_")[1]
-        
+
         if answer_code in ["P", "A", "E", "I"]:
             # Обычная логика подсчета баллов
             session.paei_scores[answer_code] += 1
-            
+
             # Сохраняем ответ для раздела с вопросами
             session.user_answers['paei'][str(session.current_question)] = answer_code
-            
+
+            # Получаем текст вопроса и ответа
+            q_idx = session.current_question
+            if q_idx < len(PAEI_QUESTIONS):
+                question_data = PAEI_QUESTIONS[q_idx]
+                answer_text = question_data["answers"].get(answer_code, answer_code)
+                msg = f"Вы выбрали: {answer_code}. {answer_text}"
+                await query.message.reply_text(msg, parse_mode='HTML')
+
             session.current_question += 1
-            
+
             # Удаляем кнопки у предыдущего сообщения
             await query.edit_message_reply_markup(reply_markup=None)
-            
+
             return await ask_paei_question(update, context)
-    
+
     await query.edit_message_text("❗ Пожалуйста, выберите один из предложенных вариантов")
     return PAEI_TESTING
 
@@ -615,21 +622,17 @@ async def ask_disc_question(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     
     logger.info(f"❓ Отправляем DISC вопрос {session.current_question + 1}/{len(DISC_QUESTIONS)}")
     
-    # Определяем откуда пришел запрос
+    question_text = f"💼 <b>DISC - Вопрос {session.current_question + 1}/{len(DISC_QUESTIONS)}</b>\n\n{question_data['question']}"
     if hasattr(update, 'message') and update.message:
-        # Обычное сообщение
         await update.message.reply_text(
-            f"💼 <b>DISC - Вопрос {session.current_question + 1}/{len(DISC_QUESTIONS)}</b>\n\n"
-            f"{question_data['question']}",
+            question_text,
             parse_mode='HTML',
             reply_markup=reply_markup
         )
     else:
-        # Callback query или другой тип обновления
         await context.bot.send_message(
             chat_id=user_id,
-            text=f"💼 <b>DISC - Вопрос {session.current_question + 1}/{len(DISC_QUESTIONS)}</b>\n\n"
-                 f"{question_data['question']}",
+            text=question_text,
             parse_mode='HTML',
             reply_markup=reply_markup
         )
@@ -639,38 +642,52 @@ async def handle_disc_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     """Обрабатывает ответ DISC через inline кнопки"""
     query = update.callback_query
     await query.answer()
-    
+
     user_id = update.effective_user.id
     session = user_sessions[user_id]
-    
+
     # Извлекаем балл из callback_data (например, "disc_3" -> 3)
     if query.data.startswith("disc_"):
         try:
             score = int(query.data.split("_")[1])
-            
+
             if 1 <= score <= 5:
                 # Получаем данные текущего вопроса
                 question_data = DISC_QUESTIONS[session.current_question]
                 category = question_data['category']  # D, I, S, C
-                
+
                 # Обычная логика добавления баллов
                 session.disc_scores[category] += score
-                
+
                 # Сохраняем ответ для раздела с вопросами
                 session.user_answers['disc'][str(session.current_question)] = score
-                
+
+                # Получаем текст вопроса и ответа
+                q_idx = session.current_question
+                if q_idx < len(DISC_QUESTIONS):
+                    scale_texts = [
+                        "1 - Совсем не согласен",
+                        "2 - Не согласен",
+                        "3 - Нейтрально",
+                        "4 - Согласен",
+                        "5 - Полностью согласен"
+                    ]
+                    answer_text = scale_texts[score-1] if 1 <= score <= 5 else str(score)
+                    msg = f"Вы выбрали: {answer_text}"
+                    await query.message.reply_text(msg, parse_mode='HTML')
+
                 session.current_question += 1
-                
+
                 logger.info(f"✅ DISC ответ принят. Категория: {category}, Балл: {score}")
                 logger.info(f"📈 Счет DISC: {session.disc_scores}")
-                
+
                 # Удаляем кнопки у предыдущего сообщения
                 await query.edit_message_reply_markup(reply_markup=None)
-                
+
                 return await ask_disc_question(update, context)
         except (ValueError, IndexError):
             pass
-    
+
     await query.edit_message_text("❗ Пожалуйста, выберите оценку от 1 до 5")
     return DISC_TESTING
 
@@ -728,9 +745,7 @@ async def ask_hexaco_question(update: Update, context: ContextTypes.DEFAULT_TYPE
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     # Формируем текст вопроса
-    question_text = f"🧠 <b>HEXACO - Вопрос {session.current_question + 1}/{len(HEXACO_QUESTIONS)}</b>\n\n"
-    question_text += f"{question_data['question']}\n\n"
-    question_text += "� <i>Выберите вариант ответа</i>"
+    question_text = f"🧠 <b>HEXACO - Вопрос {session.current_question + 1}/{len(HEXACO_QUESTIONS)}</b>\n\n{question_data['question']}"
 
     # Определяем откуда пришел запрос
     if hasattr(update, 'message') and update.message:
@@ -752,31 +767,45 @@ async def handle_hexaco_answer(update: Update, context: ContextTypes.DEFAULT_TYP
     """Обрабатывает ответ HEXACO через inline кнопки"""
     query = update.callback_query
     await query.answer()
-    
+
     user_id = update.effective_user.id
     session = user_sessions[user_id]
-    
+
     # Извлекаем балл из callback_data (например, "hexaco_3" -> 3)
     if query.data.startswith("hexaco_"):
         try:
             score = int(query.data.split("_")[1])
-            
+
             if 1 <= score <= 5:
                 # Обычная логика сохранения
                 session.hexaco_scores.append(score)
-                
+
                 # Сохраняем ответ для раздела с вопросами
                 session.user_answers['hexaco'][str(session.current_question)] = score
-                
+
+                # Получаем текст вопроса и ответа
+                q_idx = session.current_question
+                if q_idx < len(HEXACO_QUESTIONS):
+                    scale_texts = [
+                        "1 - Абсолютно не согласен",
+                        "2 - Не согласен",
+                        "3 - Нейтрально",
+                        "4 - Согласен",
+                        "5 - Полностью согласен"
+                    ]
+                    answer_text = scale_texts[score-1] if 1 <= score <= 5 else str(score)
+                    msg = f"Вы выбрали: {answer_text}"
+                    await query.message.reply_text(msg, parse_mode='HTML')
+
                 session.current_question += 1
-                
+
                 # Удаляем кнопки у предыдущего сообщения
                 await query.edit_message_reply_markup(reply_markup=None)
-                
+
                 return await ask_hexaco_question(update, context)
         except (ValueError, IndexError):
             pass
-    
+
     await query.edit_message_text("❗ Пожалуйста, выберите один из предложенных вариантов (1-5)")
     return HEXACO_TESTING
 
@@ -836,8 +865,7 @@ async def ask_soft_skills_question(update: Update, context: ContextTypes.DEFAULT
 
     skill_info = f" ({question_data['skill']})" if 'skill' in question_data else ""
     question_text = f"💪 <b>Soft Skills - Вопрос {session.current_question + 1}/{len(SOFT_SKILLS_QUESTIONS)}</b>{skill_info}\n\n"
-    question_text += f"<b>{question_data['question']}</b>\n\n"
-    question_text += "👆 <i>Выберите вариант ответа</i>"
+    question_text += f"<b>{question_data['question']}</b>"
 
     # Определяем откуда пришел запрос
     if hasattr(update, 'message') and update.message:
@@ -859,34 +887,59 @@ async def handle_soft_skills_answer(update: Update, context: ContextTypes.DEFAUL
     """Обрабатывает ответ Soft Skills через inline кнопки"""
     query = update.callback_query
     await query.answer()
-    
+
     user_id = update.effective_user.id
     session = user_sessions[user_id]
-    
+
     # Извлекаем балл из callback_data (например, "soft_3" -> 3)
     if query.data.startswith("soft_"):
         try:
             score = int(query.data.split("_")[1])
-            
+
             if 1 <= score <= 5:
                 # Обычная логика сохранения
                 session.soft_skills_scores.append(score)
-                
+
                 # Сохраняем ответ для раздела с вопросами
                 session.user_answers['soft_skills'][str(session.current_question)] = score
-                
+
+                # Получаем текст вопроса и ответа
+                q_idx = session.current_question
+                if q_idx < len(SOFT_SKILLS_QUESTIONS):
+                    question_data = SOFT_SKILLS_QUESTIONS[q_idx]
+                    answer_text = None
+                    if 'answers' in question_data and question_data['answers']:
+                        for ans in question_data['answers']:
+                            if ans['value'] == score:
+                                answer_text = f"{ans['value']}. {ans['text']}"
+                                break
+                    if not answer_text:
+                        scale_texts = [
+                            "1 - Совсем не согласен",
+                            "2 - Не согласен",
+                            "3 - Нейтрально",
+                            "4 - Согласен",
+                            "5 - Полностью согласен"
+                        ]
+                        if 1 <= score <= 5:
+                            answer_text = scale_texts[score-1]
+                        else:
+                            answer_text = str(score)
+                    msg = f"Вы выбрали: {answer_text}"
+                    await query.message.reply_text(msg, parse_mode='HTML')
+
                 logger.info(f"📝 Soft Skills ответ от {user_id}: балл {score}")
                 logger.info(f"📊 Текущий счет: {session.soft_skills_scores}")
-                
+
                 session.current_question += 1
-                
+
                 # Удаляем кнопки у предыдущего сообщения
                 await query.edit_message_reply_markup(reply_markup=None)
-                
+
                 return await ask_soft_skills_question(update, context)
         except (ValueError, IndexError):
             pass
-    
+
     await query.edit_message_text("❗ Пожалуйста, выберите один из предложенных вариантов (1-5)")
     return SOFT_SKILLS_TESTING
 
