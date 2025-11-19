@@ -13,10 +13,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup SSH agent
-        uses: webfactory/ssh-agent@v0
-        with:
-          ssh-private-key: ${{ secrets.SSH_DEPLOY_KEY }}
+      - name: Setup SSH key
+        env:
+          SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          # Записываем приватный ключ из секрета в файл
+          printf '%s\n' "$SSH_DEPLOY_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          # Запускаем ssh-agent и добавляем ключ
+          eval "$(ssh-agent -s)"
+          ssh-add ~/.ssh/id_rsa
+          # (опционально) добавить known_hosts, чтобы избежать запроса подтверждения:
+          # ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts || true
 
       - name: Copy deploy script and run
         env:
@@ -24,6 +35,11 @@ jobs:
           SSH_HOST: ${{ secrets.DEPLOY_HOST }}
           APP_DIR: /srv/psytest
         run: |
+          # Проверяем, что файл deploy.sh существует
+          if [ ! -f ./deploy.sh ]; then
+            echo "deploy.sh not found in repository root"
+            exit 1
+          fi
           ssh -o StrictHostKeyChecking=no ${SSH_USER}@${SSH_HOST} "mkdir -p ${APP_DIR}"
           scp -o StrictHostKeyChecking=no ./deploy.sh ${SSH_USER}@${SSH_HOST}:${APP_DIR}/deploy.sh
           ssh -o StrictHostKeyChecking=no ${SSH_USER}@${SSH_HOST} "chmod +x ${APP_DIR}/deploy.sh && sudo ${APP_DIR}/deploy.sh"
