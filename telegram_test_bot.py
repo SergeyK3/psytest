@@ -495,24 +495,17 @@ async def ask_paei_question(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     
     question_data = PAEI_QUESTIONS[session.current_question]
     
-    # Формируем inline клавиатуру с короткими кнопками (только буквы, горизонтально)
-    keyboard = [[
-        InlineKeyboardButton("P", callback_data="paei_P"),
-        InlineKeyboardButton("A", callback_data="paei_A"),
-        InlineKeyboardButton("E", callback_data="paei_E"),
-        InlineKeyboardButton("I", callback_data="paei_I")
-    ]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    # Формируем полный текст с вариантами ответов
-    question_text = f"📊 <b>PAEI - Вопрос {session.current_question + 1}/{len(PAEI_QUESTIONS)}</b>\n\n"
-    question_text += f"<b>{question_data['question']}</b>\n\n"
-    
-    # Добавляем все варианты ответов в текст
+    # Формируем inline клавиатуру с вариантами ответов (текст на кнопках)
+    keyboard = []
     for key in ["P", "A", "E", "I"]:
         if key in question_data["answers"]:
-            question_text += f"<b>{key}.</b> {question_data['answers'][key]}\n\n"
-    
+            btn_text = f"{key}. {question_data['answers'][key]}"
+            keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"paei_{key}")])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    # Формируем текст вопроса
+    question_text = f"📊 <b>PAEI - Вопрос {session.current_question + 1}/{len(PAEI_QUESTIONS)}</b>\n\n"
+    question_text += f"<b>{question_data['question']}</b>\n\n"
     question_text += "👆 <i>Выберите вариант ответа</i>"
     
     # Определяем откуда пришел запрос
@@ -721,48 +714,38 @@ async def ask_hexaco_question(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     question_data = HEXACO_QUESTIONS[session.current_question]
     
-    keyboard = [
-        [
-            InlineKeyboardButton("1", callback_data="hexaco_1"),
-            InlineKeyboardButton("2", callback_data="hexaco_2"),
-            InlineKeyboardButton("3", callback_data="hexaco_3"),
-            InlineKeyboardButton("4", callback_data="hexaco_4"),
-            InlineKeyboardButton("5", callback_data="hexaco_5")
-        ]
+    # Формируем inline клавиатуру с вариантами ответов (текст на кнопках)
+    scale_texts = [
+        "1 - Абсолютно не согласен",
+        "2 - Не согласен",
+        "3 - Нейтрально",
+        "4 - Согласен",
+        "5 - Полностью согласен"
     ]
+    keyboard = []
+    for i, text in enumerate(scale_texts, 1):
+        keyboard.append([InlineKeyboardButton(text, callback_data=f"hexaco_{i}")])
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
+
+    # Формируем текст вопроса
+    question_text = f"🧠 <b>HEXACO - Вопрос {session.current_question + 1}/{len(HEXACO_QUESTIONS)}</b>\n\n"
+    question_text += f"{question_data['question']}\n\n"
+    question_text += "� <i>Выберите вариант ответа</i>"
+
     # Определяем откуда пришел запрос
     if hasattr(update, 'message') and update.message:
-        # Обычное сообщение
         await update.message.reply_text(
-            f"🧠 <b>HEXACO - Вопрос {session.current_question + 1}/{len(HEXACO_QUESTIONS)}</b>\n\n"
-            f"{question_data['question']}\n\n"
-            f"📊 <i>Шкала оценки:</i>\n"
-            f"1 - Абсолютно не согласен\n"
-            f"2 - Не согласен\n"
-            f"3 - Нейтрально\n"
-            f"4 - Согласен\n"
-            f"5 - Полностью согласен",
+            question_text,
             parse_mode='HTML',
             reply_markup=reply_markup
         )
     else:
-        # Callback query или другой тип обновления
         await context.bot.send_message(
             chat_id=user_id,
-            text=f"🧠 <b>HEXACO - Вопрос {session.current_question + 1}/{len(HEXACO_QUESTIONS)}</b>\n\n"
-                 f"{question_data['question']}\n\n"
-                 f"📊 <i>Шкала оценки:</i>\n"
-                 f"1 - Абсолютно не согласен\n"
-                 f"2 - Не согласен\n"
-                 f"3 - Нейтрально\n"
-                 f"4 - Согласен\n"
-                 f"5 - Полностью согласен",
+            text=question_text,
             parse_mode='HTML',
             reply_markup=reply_markup
         )
-    
     return HEXACO_TESTING
 
 async def handle_hexaco_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -833,70 +816,43 @@ async def ask_soft_skills_question(update: Update, context: ContextTypes.DEFAULT
     
     question_data = SOFT_SKILLS_QUESTIONS[session.current_question]
     
-    # Создаем inline клавиатуру только с цифрами
+    # Формируем inline клавиатуру с вариантами ответов (текст на кнопках)
     keyboard = []
     if 'answers' in question_data and question_data['answers']:
-        # Используем варианты ответов из файла - показываем только цифры в кнопках
-        keyboard = [
-            [
-                InlineKeyboardButton("1", callback_data="soft_1"),
-                InlineKeyboardButton("2", callback_data="soft_2"),
-                InlineKeyboardButton("3", callback_data="soft_3"),
-                InlineKeyboardButton("4", callback_data="soft_4"),
-                InlineKeyboardButton("5", callback_data="soft_5")
-            ]
-        ]
+        for answer in question_data['answers']:
+            btn_text = f"{answer['value']}. {answer['text']}"
+            keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"soft_{answer['value']}" )])
     else:
-        # Используем базовую шкалу 1-5
-        keyboard = [
-            [
-                InlineKeyboardButton("1", callback_data="soft_1"),
-                InlineKeyboardButton("2", callback_data="soft_2"),
-                InlineKeyboardButton("3", callback_data="soft_3"),
-                InlineKeyboardButton("4", callback_data="soft_4"),
-                InlineKeyboardButton("5", callback_data="soft_5")
-            ]
+        scale_texts = [
+            "1 - Совсем не согласен",
+            "2 - Не согласен",
+            "3 - Нейтрально",
+            "4 - Согласен",
+            "5 - Полностью согласен"
         ]
-    
+        for i, text in enumerate(scale_texts, 1):
+            keyboard.append([InlineKeyboardButton(text, callback_data=f"soft_{i}")])
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
+
     skill_info = f" ({question_data['skill']})" if 'skill' in question_data else ""
-    
-    # Формируем полный текст с вариантами ответов
     question_text = f"💪 <b>Soft Skills - Вопрос {session.current_question + 1}/{len(SOFT_SKILLS_QUESTIONS)}</b>{skill_info}\n\n"
     question_text += f"<b>{question_data['question']}</b>\n\n"
-    
-    # Добавляем все варианты ответов в текст
-    if 'answers' in question_data and question_data['answers']:
-        for answer in question_data['answers']:
-            question_text += f"<b>{answer['value']}.</b> {answer['text']}\n\n"
-    else:
-        # Базовая шкала
-        question_text += "<b>1.</b> Совсем не согласен\n"
-        question_text += "<b>2.</b> Не согласен\n"
-        question_text += "<b>3.</b> Нейтрально\n"
-        question_text += "<b>4.</b> Согласен\n"
-        question_text += "<b>5.</b> Полностью согласен\n\n"
-    
     question_text += "👆 <i>Выберите вариант ответа</i>"
-    
+
     # Определяем откуда пришел запрос
     if hasattr(update, 'message') and update.message:
-        # Обычное сообщение
         await update.message.reply_text(
             question_text,
             parse_mode='HTML',
             reply_markup=reply_markup
         )
     else:
-        # Callback query или другой тип обновления
         await context.bot.send_message(
             chat_id=user_id,
             text=question_text,
             parse_mode='HTML',
             reply_markup=reply_markup
         )
-    
     return SOFT_SKILLS_TESTING
 
 async def handle_soft_skills_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
