@@ -159,7 +159,7 @@ class TestProjectHealthCheck:
         """Проверяет наличие основных файлов проекта"""
         essential_files = [
             "telegram_test_bot.py",
-            "enhanced_pdf_report_v2.py", 
+            "enhanced_pdf_report.py", 
             "requirements.txt",
             "scale_normalizer.py"
         ]

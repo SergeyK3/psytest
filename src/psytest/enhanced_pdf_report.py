@@ -79,59 +79,28 @@ class EnhancedPDFReport:
         self._setup_fonts()
         
     def _setup_fonts(self):
-        """Настраивает шрифты с поддержкой кириллицы"""
-        try:
-            # Пытаемся использовать системные шрифты Windows с кириллицей
-            import os
-            windows_fonts = "C:/Windows/Fonts/"
-            
-            # Список шрифтов в порядке предпочтения
-            font_candidates = [
-                ("arial.ttf", "Arial-Regular"),
-                ("arialbd.ttf", "Arial-Bold"), 
-                ("times.ttf", "Times-Regular"),
-                ("timesbd.ttf", "Times-Bold"),
-            ]
-            
-            fonts_registered = {}
-            
-            for font_file, font_name in font_candidates:
-                font_path = os.path.join(windows_fonts, font_file)
-                if os.path.exists(font_path):
-                    try:
-                        pdfmetrics.registerFont(TTFont(font_name, font_path))
-                        fonts_registered[font_name] = True
-                        print(f"✅ Зарегистрирован шрифт: {font_name}")
-                    except Exception as e:
-                        print(f"⚠️  Ошибка регистрации {font_name}: {e}")
-            
-            # Устанавливаем шрифты в зависимости от того, что удалось зарегистрировать
-            if "Arial-Regular" in fonts_registered:
-                DesignConfig.BODY_FONT = "Arial-Regular"
-                DesignConfig.SMALL_FONT = "Arial-Regular"
-                print("📝 Используется Arial для основного текста")
-            else:
+        """Настраивает шрифты с поддержкой кириллицы (DejaVuSans)"""
+        import os
+        from reportlab.pdfbase.ttfonts import TTFont
+        from reportlab.pdfbase import pdfmetrics
+        font_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'fonts', 'DejaVuSans.ttf')
+        if os.path.exists(font_path):
+            try:
+                pdfmetrics.registerFont(TTFont("DejaVuSans", font_path))
+                DesignConfig.TITLE_FONT = "DejaVuSans"
+                DesignConfig.BODY_FONT = "DejaVuSans"
+                DesignConfig.SMALL_FONT = "DejaVuSans"
+                print("✅ Используется шрифт DejaVuSans для всех текстов PDF")
+            except Exception as e:
+                print(f"⚠️ Ошибка регистрации DejaVuSans: {e}")
+                DesignConfig.TITLE_FONT = "Times-Bold"
                 DesignConfig.BODY_FONT = "Times-Roman"
                 DesignConfig.SMALL_FONT = "Times-Roman"
-                print("📝 Используется Times-Roman для основного текста")
-            
-            if "Arial-Bold" in fonts_registered:
-                DesignConfig.TITLE_FONT = "Arial-Bold"
-                print("📝 Используется Arial-Bold для заголовков")
-            elif "Times-Bold" in fonts_registered:
-                DesignConfig.TITLE_FONT = "Times-Bold"
-                print("📝 Используется Times-Bold для заголовков")
-            else:
-                DesignConfig.TITLE_FONT = "Times-Bold"
-                print("📝 Используется встроенный Times-Bold для заголовков")
-                
-        except Exception as e:
-            print(f"⚠️  Ошибка настройки шрифтов: {e}")
-            # В случае ошибки используем встроенные шрифты
+        else:
+            print(f"⚠️ Не найден файл шрифта: {font_path}")
             DesignConfig.TITLE_FONT = "Times-Bold"
             DesignConfig.BODY_FONT = "Times-Roman"
             DesignConfig.SMALL_FONT = "Times-Roman"
-            print("📝 Используются встроенные шрифты Times")
         
     def create_visual_bar(self, value: float, max_value: float = 10, 
                          width: int = 100) -> str:
@@ -245,7 +214,7 @@ class EnhancedPDFReport:
         
         # Футер с информацией об AI
         story.append(Spacer(1, 10*mm))
-        story.append(Paragraph("🤖 Интерпретации сгенерированы с помощью OpenAI GPT-3.5", 
+        story.append(Paragraph("🤖 Интерпретации сгенерированы с помощью OpenAI GPT-5.1",
                               styles['Footer']))
         story.append(Paragraph("Powered by OpenAI (https://openai.com)", 
                               styles['Footer']))

@@ -7,7 +7,7 @@
 import sys
 sys.path.append('.')
 
-from enhanced_pdf_report_v2 import EnhancedPDFReportV2
+from enhanced_pdf_report import EnhancedPDFReportV2
 from scale_normalizer import ScaleNormalizer
 from datetime import datetime
 from pathlib import Path

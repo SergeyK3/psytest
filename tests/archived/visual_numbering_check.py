@@ -7,7 +7,7 @@
 
 from pathlib import Path
 from datetime import datetime
-from enhanced_pdf_report_v2 import EnhancedPDFReportV2
+from enhanced_pdf_report import EnhancedPDFReportV2
 
 def visual_page_numbering_test():
     """

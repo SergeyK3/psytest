@@ -8,7 +8,7 @@ from pathlib import Path
 import tempfile
 from datetime import datetime
 
-# Избегаем проблем с unicode в enhanced_pdf_report_v2, импортируем только нужные классы
+# Избегаем проблем с unicode в enhanced_pdf_report, импортируем только нужные классы
 import sys
 import os
 sys.path.append(os.getcwd())
@@ -45,7 +45,7 @@ def test_pdf_generation():
     
     try:
         # Импортируем PDF генератор без создания экземпляра (чтобы избежать print)
-        from enhanced_pdf_report_v2 import EnhancedPDFReportV2
+        from enhanced_pdf_report import EnhancedPDFReportV2
         
         # Создаем генератор 
         print("Создаем PDF генератор...")

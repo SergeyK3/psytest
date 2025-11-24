@@ -14,9 +14,9 @@ class TestRefactoredIntegration:
     def test_pdf_module_loads_after_refactor(self):
         """Проверяет, что PDF модуль загружается после рефакторинга"""
         try:
-            import enhanced_pdf_report_v2
-            assert hasattr(enhanced_pdf_report_v2, 'EnhancedPDFReportV2')
-            assert hasattr(enhanced_pdf_report_v2.EnhancedPDFReportV2, 'generate_enhanced_report_with_gdrive')
+            import enhanced_pdf_report
+            assert hasattr(enhanced_pdf_report, 'EnhancedPDFReportV2')
+            assert hasattr(enhanced_pdf_report.EnhancedPDFReportV2, 'generate_enhanced_report_with_gdrive')
         except ImportError as e:
             pytest.fail(f"PDF модуль не загружается: {e}")
     
@@ -24,10 +24,10 @@ class TestRefactoredIntegration:
         """Проверяет совместимость бота с отрефакторенным PDF модулем"""
         try:
             import telegram_test_bot
-            import enhanced_pdf_report_v2
+            import enhanced_pdf_report
             
             # Проверяем, что генератор создается
-            generator = enhanced_pdf_report_v2.EnhancedPDFReportV2()
+            generator = enhanced_pdf_report.EnhancedPDFReportV2()
             assert generator is not None
             
             # Проверяем наличие метода, который использует бот
@@ -39,9 +39,9 @@ class TestRefactoredIntegration:
     def test_pdf_generation_returns_correct_types(self):
         """Проверяет, что PDF генерация возвращает правильные типы"""
         try:
-            import enhanced_pdf_report_v2
+            import enhanced_pdf_report
             
-            generator = enhanced_pdf_report_v2.EnhancedPDFReportV2()
+            generator = enhanced_pdf_report.EnhancedPDFReportV2()
             
             # Создаем временный файл для тестирования
             with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp:
