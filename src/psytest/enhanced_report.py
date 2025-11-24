@@ -126,7 +126,7 @@ def render_enhanced_report(
     if use_ai and ai_interpreter:
         doc.add_paragraph()
         doc.add_paragraph(
-            "🤖 Интерпретации результатов сгенерированы с помощью OpenAI GPT-3.5. "
+            "🤖 Интерпретации результатов сгенерированы с помощью OpenAI GPT-5.1. "
             "Powered by OpenAI (https://openai.com)"
         )
     

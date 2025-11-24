@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-ТЕСТ РАБОЧЕЙ ВЕРСИИ enhanced_pdf_report_v2.py из коммита v4.0.0
+ТЕСТ РАБОЧЕЙ ВЕРСИИ enhanced_pdf_report.py из коммита v4.0.0
 """
 
 from pathlib import Path
 from datetime import datetime
-from enhanced_pdf_report_v2 import EnhancedPDFReportV2
+from enhanced_pdf_report import EnhancedPDFReportV2
 
 def test_v4_working_version():
     """
-    Тест рабочей версии enhanced_pdf_report_v2.py из v4.0.0
+    Тест рабочей версии enhanced_pdf_report.py из v4.0.0
     """
     print("🚀 ТЕСТ РАБОЧЕЙ ВЕРСИИ V4.0.0")
     print("=" * 50)
