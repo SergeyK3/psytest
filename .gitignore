@@ -41,3 +41,4 @@ token.json
 
 # Configuration examples (template files)
 !.env.example
+.cache/
