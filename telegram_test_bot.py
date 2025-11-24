@@ -26,7 +26,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 load_dotenv()
 
 # Импорты наших модулей
-from enhanced_pdf_report_v2 import EnhancedPDFReportV2
+from enhanced_pdf_report import EnhancedPDFReportV2
 from interpretation_utils import generate_interpretations_from_prompt
 from src.psytest.ai_interpreter import get_ai_interpreter
 from report_archiver import save_report_copy

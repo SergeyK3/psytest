@@ -10,7 +10,7 @@ from telegram import Bot
 async def test_bot():
     """Тестирует подключение к боту"""
     try:
-        bot = Bot('8250482375:AAH3ZCQ3s6XJyl5g32sY63g5HKOHnqGq1WQ')
+        bot = Bot('REDACTED_TOKEN')
         me = await bot.get_me()
         print(f"✅ Бот работает!")
         print(f"🤖 Имя: {me.first_name}")
