@@ -1,0 +1,61 @@
+# GitHub Actions workflow для деплоя через SSH при пуше в main (debug mode)
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        env:
+          SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
+        run: |
+          set -euxo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_DEPLOY_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          eval "$(ssh-agent -s)"
+          ssh-add ~/.ssh/id_rsa
+          # (опционально) добавить known_hosts:
+          # ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts || true
+          chmod 644 ~/.ssh/known_hosts || true
+          # Покажем, что ключ добавлен (не печатаем ключи, только сообщение)
+          ssh-add -l || true
+
+      - name: Copy deploy script and run (debug)
+        env:
+          SSH_USER: ${{ secrets.DEPLOY_USER }}
+          SSH_HOST: ${{ secrets.DEPLOY_HOST }}
+          APP_DIR: /srv/psytest
+        run: |
+          set -euxo pipefail
+          echo "Running deploy debug step"
+          # Покажем переменные (не показываем секреты сами)
+          echo "SSH_USER set: ${SSH_USER:+yes}"
+          echo "SSH_HOST set: ${SSH_HOST:+yes}"
+          # Проверка наличия deploy.sh
+          if [ ! -f ./deploy.sh ]; then
+            echo "ERROR: deploy.sh not found in repository root"
+            ls -la .
+            exit 1
+          fi
+          # Тестовое подключение с подробным выводом
+          echo "Testing SSH connectivity (verbose)..."
+          ssh -o StrictHostKeyChecking=no -o BatchMode=yes -v ${SSH_USER}@${SSH_HOST} "echo connected" || { echo "SSH test failed with exit $?"; exit 1; }
+
+          echo "Creating remote dir..."
+          ssh -o StrictHostKeyChecking=no -v ${SSH_USER}@${SSH_HOST} "mkdir -p ${APP_DIR}" || { echo "mkdir remote failed with exit $?"; exit 1; }
+
+          echo "Copying deploy.sh (scp verbose)..."
+          scp -o StrictHostKeyChecking=no -v ./deploy.sh ${SSH_USER}@${SSH_HOST}:${APP_DIR}/deploy.sh || { echo "scp failed with exit $?"; exit 1; }
+
+          echo "Running remote deploy script (ssh verbose)..."
+          ssh -o StrictHostKeyChecking=no -v ${SSH_USER}@${SSH_HOST} "chmod +x ${APP_DIR}/deploy.sh && sudo ${APP_DIR}/deploy.sh" || { echo "remote deploy failed with exit $?"; exit 1; }

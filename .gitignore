@@ -1,4 +1,3 @@
-# Python
 __pycache__/
 *.pyc
 *.pyo
@@ -6,6 +5,7 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+# Локальные переменные окружения (секреты, токены, ключи)
 .env
 .env.*
 

@@ -1,5 +1,5 @@
 """
-Модуль для интерпретации результатов психологических тестов с помощью OpenAI GPT-3.5
+Модуль для интерпретации результатов психологических тестов с помощью OpenAI GPT-5.1
 """
 import os
 from typing import Dict, Optional
@@ -11,15 +11,15 @@ from .prompts import load_prompt
 
 
 class AIInterpreter:
-    """Класс для генерации интерпретаций с помощью OpenAI GPT-3.5"""
+    """Класс для генерации интерпретаций с помощью OpenAI GPT-5.1"""
     
-    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-3.5-turbo"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-5.1"):
         """
         Инициализация AI интерпретатора
         
         Args:
             api_key: OpenAI API ключ (если None, берется из переменной окружения)
-            model: Модель для использования (по умолчанию gpt-3.5-turbo)
+            model: Модель для использования (по умолчанию gpt-5.1)
         """
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.model = model
