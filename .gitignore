@@ -28,6 +28,16 @@ Thumbs.db
 out_report.docx
 *.pdf
 
+# Backup files
+*.bak
+*.fixbak
+*.postfixbak
+*.pre_fixbak
+*.save
+
+# Generated temp charts
+temp_charts/
+
 # Вся папка docs/ исключена из репозитория (содержит все PDF отчеты и анализы)
 docs/
 
