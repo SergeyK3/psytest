@@ -7,7 +7,7 @@
 import sys
 import os
 from pathlib import Path
-from enhanced_pdf_report_v2 import EnhancedPDFReportV2
+from enhanced_pdf_report import EnhancedPDFReportV2
 from oauth_google_drive import upload_to_google_drive_oauth
 
 def test_enhanced_numbering():

@@ -27,7 +27,7 @@ def test_google_drive_integration():
     
     try:
         # Импортируем класс для создания отчетов
-        from enhanced_pdf_report_v2 import EnhancedPDFReportV2
+        from enhanced_pdf_report import EnhancedPDFReportV2
         from datetime import datetime
         from pathlib import Path
         print("✅ Импорт EnhancedPDFReportV2 успешен")
@@ -125,7 +125,7 @@ def test_basic_pdf_generation():
     print("\n📄 Тестируем базовое создание PDF...")
     
     try:
-        from enhanced_pdf_report_v2 import EnhancedPDFReportV2
+        from enhanced_pdf_report import EnhancedPDFReportV2
         from datetime import datetime
         
         # Подготавливаем правильные параметры

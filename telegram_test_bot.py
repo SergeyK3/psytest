@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('Agg')
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -1292,8 +1294,8 @@ def main():
     
     # Запускаем бота
     logger.info("🤖 Бот запущен и готов к работе!")
-    logger.info("📱 Telegram: @psychtestteambot")
-    print("🚀 Бот запущен! Можно тестировать в Telegram: @psychtestteambot")
+    logger.info("📱 Telegram: @psytestDev2bot")
+    print("🚀 Бот запущен! Можно тестировать в Telegram: @psytestDev2bot")
     
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 

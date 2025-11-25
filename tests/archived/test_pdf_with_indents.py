@@ -4,7 +4,7 @@
 и загрузки в Google Drive для проверки внешнего вида
 """
 
-from enhanced_pdf_report_v2 import EnhancedPDFReportV2
+from enhanced_pdf_report import EnhancedPDFReportV2
 from pathlib import Path
 import datetime
 

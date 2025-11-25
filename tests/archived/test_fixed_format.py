@@ -9,7 +9,7 @@ import datetime
 def test_updated_format_pdf():
     """Создает PDF с правильным форматом согласно обновленному промпту"""
     
-    from enhanced_pdf_report_v2 import EnhancedPDFReportV2
+    from enhanced_pdf_report import EnhancedPDFReportV2
     
     # Тестовые данные
     test_data = {

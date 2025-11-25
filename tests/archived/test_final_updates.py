@@ -8,7 +8,7 @@ import telegram_test_bot
 from pathlib import Path
 import tempfile
 from datetime import datetime
-from enhanced_pdf_report_v2 import EnhancedPDFReportV2
+from enhanced_pdf_report import EnhancedPDFReportV2
 
 def test_updated_questions_and_normalization():
     """Тест всех обновленных вопросов и нормализации"""

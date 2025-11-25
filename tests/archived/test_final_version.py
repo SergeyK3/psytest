@@ -6,7 +6,7 @@
 """
 
 from pathlib import Path
-from enhanced_pdf_report_v2 import EnhancedPDFReportV2
+from enhanced_pdf_report import EnhancedPDFReportV2
 from test_scenarios import TEST_SCENARIOS
 
 def test_final_version():

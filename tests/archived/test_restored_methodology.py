@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from enhanced_pdf_report_v2 import EnhancedPDFReportV2
+from enhanced_pdf_report import EnhancedPDFReportV2
 from datetime import datetime
 
 def test_restored_methodology_section():

@@ -3,7 +3,7 @@
 Тест сохранения PDF только в Google Drive (без локальных копий)
 """
 
-from enhanced_pdf_report_v2 import EnhancedPDFReportV2
+from enhanced_pdf_report import EnhancedPDFReportV2
 from datetime import datetime
 from pathlib import Path
 import os

@@ -138,7 +138,7 @@ def test_pdf_generation():
     print("=" * 55)
     
     try:
-        from enhanced_pdf_report_v2 import EnhancedPDFReportV2
+        from enhanced_pdf_report import EnhancedPDFReportV2
         from src.psytest.ai_interpreter import get_ai_interpreter
         from pathlib import Path
         from datetime import datetime

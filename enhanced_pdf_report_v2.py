@@ -874,11 +874,31 @@ class EnhancedPDFReportV2:
             
             print(f"[UPLOAD] Загрузка PDF отчета в Google Drive: {participant_name or 'неизвестный пользователь'}")
             
-            # Загружаем напрямую в указанную папку без месячной структуры
+            # Загружаем в папку по году и месяцу создания файла
+            file_dt = None
+            try:
+                # Получаем дату из имени файла, если есть
+                import re
+                m = re.search(r"(\d{4})-(\d{2})-\d{2}", str(file_path))
+                if m:
+                    year = int(m.group(1))
+                    month = int(m.group(2))
+                    file_dt = (year, month)
+            except Exception:
+                pass
+
+            from datetime import datetime
+            if not file_dt:
+                stat = file_path.stat()
+                dt = datetime.fromtimestamp(stat.st_mtime)
+                year, month = dt.year, dt.month
+
             web_link = upload_to_google_drive_oauth(
                 file_path=str(file_path),
                 folder_name="PsychTest Reports",
-                use_monthly_structure=False
+                use_monthly_structure=True,
+                year=year,
+                month=month
             )
             
             if web_link:

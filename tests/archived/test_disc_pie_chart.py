@@ -10,7 +10,7 @@ from pathlib import Path
 sys.path.append('.')
 sys.path.append('./src')
 
-from enhanced_pdf_report_v2 import EnhancedCharts
+from enhanced_pdf_report import EnhancedCharts
 
 def test_disc_pie_chart():
     """Тестируем создание круговой диаграммы DISC"""

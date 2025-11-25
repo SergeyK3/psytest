@@ -9,7 +9,7 @@ sys.path.append('.')
 sys.path.append('src')
 
 from pathlib import Path
-from enhanced_pdf_report_v2 import EnhancedPDFReportV2
+from enhanced_pdf_report import EnhancedPDFReportV2
 from scale_normalizer import ScaleNormalizer
 from datetime import datetime
 from pdf_paths import get_docs_pdf_path

@@ -9,7 +9,7 @@ from pathlib import Path
 # Добавляем src в путь для импорта
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from enhanced_pdf_report_v2 import EnhancedCharts
+from enhanced_pdf_report import EnhancedCharts
 
 def test_balanced_integration():
     """Тестируем интеграцию обновленной системы с реальными данными"""

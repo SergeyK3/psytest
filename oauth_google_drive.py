@@ -94,12 +94,14 @@ def create_monthly_folder_structure(service, year: int, month: int, base_folder_
         # 2. Ищем или создаем папку года в базовой папке
         year_str = str(year)
         query = f"name='{year_str}' and mimeType='application/vnd.google-apps.folder' and '{base_folder_id}' in parents and trashed=false"
-        results = service.files().list(q=query, fields="files(id, name)").execute()
+        results = service.files().list(q=query, fields="files(id, name, parents)").execute()
         folders = results.get('files', [])
-        
-        print(f"🔍 Поиск папки года '{year_str}' в базовой папке")
+
+        print(f"🔍 Поиск папки года '{year_str}' в базовой папке (ID: {base_folder_id})")
         print(f"🔍 Найдено папок с именем '{year_str}': {len(folders)}")
-        
+        for f in folders:
+            print(f"   - Папка: {f['name']} (ID: {f['id']}), parents: {f.get('parents')}")
+
         if folders:
             year_folder_id = folders[0]['id']
             print(f"📁 ✅ Найдена существующая папка года: {year_str} (ID: {year_folder_id})")
@@ -143,7 +145,7 @@ def create_monthly_folder_structure(service, year: int, month: int, base_folder_
         print(f"❌ Ошибка создания структуры папок: {e}")
         return None
 
-def upload_to_google_drive_oauth(file_path: str, folder_name: str = "PsychTest Reports", folder_id: str = "1Z77eo09GmcLuhsDGlb17E86vfb2p3jEM", use_monthly_structure: bool = False) -> Optional[str]:
+def upload_to_google_drive_oauth(file_path: str, folder_name: str = "PsychTest Reports", folder_id: str = "1TI-P8ZGj0IOjw97OmEpjyVc7jAW_hsy2", use_monthly_structure: bool = False, year: int = None, month: int = None) -> Optional[str]:
     """Загружает файл в Google Drive используя OAuth
     
     Args:
@@ -151,6 +153,8 @@ def upload_to_google_drive_oauth(file_path: str, folder_name: str = "PsychTest R
         folder_name: Название базовой папки (используется если folder_id не указан)
         folder_id: Конкретный ID базовой папки Google Drive (внутри создается структура год/месяц)
         use_monthly_structure: Использовать ли месячную структуру папок (год/месяц)
+        year: Год для создания папки (по умолчанию текущий)
+        month: Месяц для создания папки (по умолчанию текущий)
     """
     
     service = setup_oauth_google_drive()
@@ -162,31 +166,22 @@ def upload_to_google_drive_oauth(file_path: str, folder_name: str = "PsychTest R
         from googleapiclient.errors import HttpError
         import datetime
         
-        # Если указан конкретный ID папки и нужна месячная структура
-        if folder_id and use_monthly_structure:
-            # Создаем месячную структуру внутри указанной папки
+        # Всегда ищем/создаём месячную структуру внутри базовой папки
+        if use_monthly_structure:
             now = datetime.datetime.now()
-            monthly_folder_id = create_monthly_folder_structure(service, now.year, now.month, folder_id, folder_name)
+            use_year = year if year is not None else now.year
+            use_month = month if month is not None else now.month
+            monthly_folder_id = create_monthly_folder_structure(service, use_year, use_month, folder_id, folder_name)
             if monthly_folder_id:
                 folder_id = monthly_folder_id
             else:
                 print("❌ Не удалось создать месячную структуру, используем базовую папку")
                 print(f"📁 Используется базовая папка с ID: {folder_id}")
-        elif folder_id:
-            print(f"📁 Используется указанная папка с ID: {folder_id}")
-        elif use_monthly_structure:
-            # Используем месячную структуру папок
-            now = datetime.datetime.now()
-            folder_id = create_monthly_folder_structure(service, now.year, now.month, folder_id, folder_name)
-            if not folder_id:
-                print("❌ Не удалось создать месячную структуру папок")
-                return None
         else:
             # Ищем или создаем папку по имени (старая логика)
             query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder'"
             results = service.files().list(q=query, fields="files(id, name)").execute()
             folders = results.get('files', [])
-            
             if folders:
                 folder_id = folders[0]['id']
                 print(f"📁 Найдена папка: {folder_name}")
