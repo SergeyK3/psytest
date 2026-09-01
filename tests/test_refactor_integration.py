@@ -4,8 +4,6 @@
 
 import pytest
 from pathlib import Path
-import tempfile
-import os
 
 
 class TestRefactoredIntegration:
@@ -20,14 +18,16 @@ class TestRefactoredIntegration:
         except ImportError as e:
             pytest.fail(f"PDF модуль не загружается: {e}")
     
-    def test_telegram_bot_compatibility(self):
+    def test_telegram_bot_compatibility(self, safe_tmp_path):
         """Проверяет совместимость бота с отрефакторенным PDF модулем"""
         try:
             import telegram_test_bot
             import enhanced_pdf_report
             
             # Проверяем, что генератор создается
-            generator = enhanced_pdf_report.EnhancedPDFReportV2()
+            generator = enhanced_pdf_report.EnhancedPDFReportV2(
+                template_dir=safe_tmp_path / "charts"
+            )
             assert generator is not None
             
             # Проверяем наличие метода, который использует бот
@@ -36,16 +36,17 @@ class TestRefactoredIntegration:
         except Exception as e:
             pytest.fail(f"Ошибка совместимости: {e}")
     
-    def test_pdf_generation_returns_correct_types(self):
+    def test_pdf_generation_returns_correct_types(self, safe_tmp_path):
         """Проверяет, что PDF генерация возвращает правильные типы"""
         try:
             import enhanced_pdf_report
             
-            generator = enhanced_pdf_report.EnhancedPDFReportV2()
+            generator = enhanced_pdf_report.EnhancedPDFReportV2(
+                template_dir=safe_tmp_path / "charts"
+            )
             
-            # Создаем временный файл для тестирования
-            with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp:
-                tmp_path = Path(tmp.name)
+            # Создаем файл в sandbox-safe временном каталоге fixture.
+            tmp_path = safe_tmp_path / "integration-report.pdf"
             
             try:
                 # Тестовые данные
@@ -91,9 +92,7 @@ class TestRefactoredIntegration:
                 assert gdrive_link is None or isinstance(gdrive_link, str), "Второй элемент должен быть None или str"
                 
             finally:
-                # Очищаем временный файл
-                if tmp_path.exists():
-                    os.unlink(tmp_path)
+                tmp_path.unlink(missing_ok=True)
                     
         except Exception as e:
             pytest.fail(f"Ошибка генерации PDF: {e}")

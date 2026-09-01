@@ -36,6 +36,8 @@ tests/test_*/
 
 # Google OAuth/Drive credentials (содержат секретные данные)
 google_drive_credentials.json
+google-drive-credentials.json
+*-credentials.json
 oauth_credentials.json
 token.json
 

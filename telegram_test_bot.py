@@ -16,8 +16,11 @@ import tempfile
 import shutil
 import os
 import re
+import unicodedata
+import uuid
+from dataclasses import dataclass
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler, CallbackQueryHandler
@@ -29,7 +32,15 @@ load_dotenv()
 from enhanced_pdf_report import EnhancedPDFReportV2
 from interpretation_utils import generate_interpretations_from_prompt
 from src.psytest.ai_interpreter import get_ai_interpreter
-from report_archiver import save_report_copy
+from google_drive_service import GoogleDriveUploader
+from report_delivery import (
+    DeliveryState,
+    deliver_full_report,
+    enqueue_pending_report,
+    ensure_private_directory,
+    pending_reports_dir_from_environment,
+    report_work_dir_from_environment,
+)
 from scale_normalizer import ScaleNormalizer
 
 # === НАСТРОЙКИ ===
@@ -50,6 +61,45 @@ logger = logging.getLogger(__name__)
 
 # === ХРАНИЛИЩЕ ПОЛЬЗОВАТЕЛЕЙ ===
 user_sessions = {}
+
+
+@dataclass(frozen=True)
+class GeneratedReports:
+    """Generated reports awaiting Telegram and Drive delivery."""
+
+    user_pdf: Path
+    full_pdf: Path
+
+
+def normalize_filename_component(value: str, fallback: str = "participant") -> str:
+    """Return a bounded filename component without path traversal characters."""
+    normalized = unicodedata.normalize("NFKC", value or "")
+    normalized = normalized.replace("/", "_").replace("\\", "_")
+    normalized = re.sub(r"[^\w.-]+", "_", normalized, flags=re.UNICODE)
+    normalized = normalized.strip("._-")[:80]
+    return normalized or fallback
+
+
+def build_unique_report_paths(
+    user_id: int,
+    participant_name: str,
+    work_dir: Path,
+    now_utc: datetime | None = None,
+    unique_id: uuid.UUID | None = None,
+) -> tuple[Path, Path]:
+    """Build non-colliding physical paths independent of display filenames."""
+    timestamp = (now_utc or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    timestamp_part = timestamp.strftime("%Y-%m-%d_%H-%M-%S.%fZ")
+    uuid_part = (unique_id or uuid.uuid4()).hex
+    user_part = normalize_filename_component(str(user_id), "unknown-user")
+    participant_part = normalize_filename_component(participant_name)
+    base = f"{timestamp_part}_tg-{user_part}_{uuid_part}_{participant_part}"
+    directory = ensure_private_directory(work_dir)
+    return directory / f"{base}_user.pdf", directory / f"{base}_full.pdf"
+
+
+def display_report_filename(participant_name: str) -> str:
+    return f"Отчет_{normalize_filename_component(participant_name)}.pdf"
 
 class UserSession:
     """Класс для хранения данных пользователя"""
@@ -967,6 +1017,8 @@ async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             parse_mode='HTML'
         )
     
+    generated_reports = None
+    full_report_delivery = None
     try:
         # Обработка результатов по методикам
         # PAEI: сохраняем оригинальные баллы согласно методике Адизеса
@@ -1004,18 +1056,18 @@ async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         
         # Генерируем два PDF отчета в отдельном потоке
         logger.info("🔄 Начинаем генерацию отчетов...")
-        pdf_path_user, pdf_path_gdrive = await asyncio.to_thread(generate_user_report, session)
-        logger.info(f"✅ Отчеты готовы: {pdf_path_user}, {pdf_path_gdrive}")
+        generated_reports = await asyncio.to_thread(generate_user_report, session)
+        logger.info("✅ Пользовательский и полный отчеты готовы")
         
         # Отправляем пользователю ТОЛЬКО его отчет (без детализации вопросов)
         logger.info("📤 Отправляем отчет пользователю...")
-        with open(pdf_path_user, 'rb') as pdf_file:
+        with generated_reports.user_pdf.open('rb') as pdf_file:
             # Определяем способ отправки документа
             if hasattr(update, 'message') and update.message:
                 # Обычное сообщение
                 await update.message.reply_document(
                     document=pdf_file,
-                    filename=f"Отчет_{session.name.replace(' ', '_')}.pdf",
+                    filename=display_report_filename(session.name),
                     caption=f"📊 <b>Ваш персональный отчет готов!</b>\n\n"
                            f"👤 {session.name}\n"
                            f"📅 {datetime.now().strftime('%d.%m.%Y %H:%M')}",
@@ -1026,22 +1078,49 @@ async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 await context.bot.send_document(
                     chat_id=user_id,
                     document=pdf_file,
-                    filename=f"Отчет_{session.name.replace(' ', '_')}.pdf",
+                    filename=display_report_filename(session.name),
                     caption=f"📊 <b>Ваш персональный отчет готов!</b>\n\n"
                            f"👤 {session.name}\n"
                            f"📅 {datetime.now().strftime('%d.%m.%Y %H:%M')}",
                     parse_mode='HTML'
                 )
         logger.info("✅ Отчет успешно отправлен пользователю!")
+
+        # Only after Telegram confirms the user document do we deliver the full
+        # report to Drive. Delivery itself deletes or durably queues the local PDF.
+        full_report_delivery = await asyncio.to_thread(
+            deliver_full_report,
+            generated_reports.full_pdf,
+            upload_full_report,
+            pending_reports_dir_from_environment(),
+        )
+        if full_report_delivery.uploaded:
+            logger.info("☁️ Полный отчет подтвержденно загружен в Google Drive")
+            if full_report_delivery.cleanup_error_type:
+                logger.warning(
+                    "Локальная очистка загруженного отчета отложена: %s",
+                    full_report_delivery.cleanup_error_type,
+                )
+        elif full_report_delivery.state in {
+            DeliveryState.QUEUED,
+            DeliveryState.QUEUED_CLEANUP_PENDING,
+        }:
+            logger.warning(
+                "Ошибка Drive (%s); полный отчет сохранен в pending",
+                full_report_delivery.upload_error_type or "UnknownError",
+            )
+            if full_report_delivery.cleanup_error_type:
+                logger.warning(
+                    "Локальная очистка после pending отложена: %s",
+                    full_report_delivery.cleanup_error_type,
+                )
+        else:
+            logger.critical(
+                "Drive=%s; pending=%s; полный отчет оставлен в work-dir",
+                full_report_delivery.upload_error_type or "UnknownError",
+                full_report_delivery.pending_error_type or "UnknownError",
+            )
         
-        # Удаляем временные файлы безопасно
-        import os
-        for pdf_path in [pdf_path_user, pdf_path_gdrive]:
-            if os.path.exists(pdf_path):
-                try:
-                    os.unlink(pdf_path)
-                except Exception as del_err:
-                    logger.warning(f"⚠️ Не удалось удалить временный PDF-файл {pdf_path}: {del_err}")
         # Отправляем благодарность
         if hasattr(update, 'message') and update.message:
             # Обычное сообщение
@@ -1057,9 +1136,7 @@ async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 parse_mode='HTML'
             )
     except Exception as e:
-        logger.error(f"Ошибка генерации отчета: {e}")
-        import traceback
-        logger.error(f"Подробная ошибка: {traceback.format_exc()}")
+        logger.error("Ошибка генерации или доставки отчета: %s", type(e).__name__)
         
         # Отправляем сообщение об ошибке
         if hasattr(update, 'message') and update.message:
@@ -1075,28 +1152,69 @@ async def complete_testing(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 text="❌ Произошла ошибка при генерации отчета.\n"
                      "Попробуйте еще раз или обратитесь в поддержку."
             )
+    finally:
+        # The Telegram copy is always ephemeral. If execution stopped before Drive
+        # delivery, retain the completed full report in the protected queue.
+        if generated_reports and generated_reports.user_pdf.exists():
+            try:
+                generated_reports.user_pdf.unlink()
+            except Exception as del_err:
+                logger.warning(
+                    "⚠️ Не удалось удалить пользовательский PDF: %s",
+                    type(del_err).__name__,
+                )
+        if (
+            generated_reports
+            and full_report_delivery is None
+            and generated_reports.full_pdf.exists()
+        ):
+            try:
+                published = enqueue_pending_report(
+                    generated_reports.full_pdf,
+                    pending_reports_dir_from_environment(),
+                )
+                logger.warning("⚠️ Полный отчет сохранен в pending до отправки в Drive")
+                if published.cleanup_error_type:
+                    logger.warning(
+                        "Локальная очистка после pending отложена: %s",
+                        published.cleanup_error_type,
+                    )
+            except Exception as queue_error:
+                logger.critical(
+                    "Полный отчет не удалось переместить в pending; тип ошибки: %s",
+                    type(queue_error).__name__,
+                )
     # Очищаем сессию
     if user_id in user_sessions:
         del user_sessions[user_id]
     return ConversationHandler.END
 
-def generate_user_report(session: UserSession) -> tuple[str, str]:
+def upload_full_report(path: Path) -> str:
+    """Upload one full report and return a confirmation without exposing IDs."""
+    result = GoogleDriveUploader.from_environment().upload(path)
+    return result.web_view_link or "uploaded"
+
+
+def generate_user_report(session: UserSession) -> GeneratedReports:
     """Генерирует два PDF отчета: один для пользователя (без вопросов), другой для Google Drive (с вопросами)"""
     
     # Создаем временную папку для диаграмм
     temp_dir = tempfile.mkdtemp()
     temp_charts_dir = Path(temp_dir) / "charts"
     temp_charts_dir.mkdir(exist_ok=True)
+    pdf_path_user = None
+    pdf_path_gdrive = None
+    full_report_complete = False
     
     try:
         # Всегда собираем ответы пользователя для отчета в Google Drive
         # Восстанавливаем рабочий код для раздела с вопросами
         user_answers = session.user_answers
         
-        # 🔍 ОТЛАДКА: Логируем собранные ответы
-        logger.info(f"🔍 Собранные ответы пользователя:")
+        # Log counts only: answers and participant data are sensitive.
+        logger.info("🔍 Собраны ответы пользователя")
         for test_type, answers in user_answers.items():
-            logger.info(f"  {test_type.upper()}: {len(answers)} ответов - {dict(list(answers.items())[:3]) if answers else 'пусто'}{'...' if len(answers) > 3 else ''}")
+            logger.info("  %s: %d ответов", test_type.upper(), len(answers))
         
         # Инициализируем генератор PDF БЕЗ раздела вопросов для пользователя
         pdf_generator_user = EnhancedPDFReportV2(
@@ -1134,7 +1252,7 @@ def generate_user_report(session: UserSession) -> tuple[str, str]:
                 interpretations["general"] = ai_interpreter.interpret_general_conclusion(all_scores)
                 
             except Exception as e:
-                print(f"⚠️ Ошибка AI интерпретации: {e}")
+                logger.warning("Ошибка AI интерпретации: %s", type(e).__name__)
                 # Fallback на интерпретации согласно формату general_system_res.txt
                 interpretations = generate_interpretations_from_prompt(
                     session.paei_scores, session.disc_scores, 
@@ -1147,16 +1265,12 @@ def generate_user_report(session: UserSession) -> tuple[str, str]:
                 session.hexaco_scores, session.soft_skills_scores
             )
         
-        # Создаем папки для сохранения PDF
-        docs_dir = Path("docs")
-        docs_dir.mkdir(exist_ok=True)
-        
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        user_name_part = session.name.replace(' ', '_') if session.name else 'TelegramUser'
-        
-        # Пути для двух отчетов
-        pdf_path_user = docs_dir / f"{timestamp}_{user_name_part}.pdf"                           # Для пользователя (чистое имя)
-        pdf_path_gdrive = docs_dir / f"{timestamp}_{user_name_part}_(tg_{session.user_id})_full.pdf"    # Для Google Drive (с ID)
+        # Physical paths are unique and independent from the Telegram display name.
+        pdf_path_user, pdf_path_gdrive = build_unique_report_paths(
+            session.user_id,
+            session.name,
+            report_work_dir_from_environment(),
+        )
         
         # Нормализуем баллы к единой шкале 0-10
         paei_normalized, paei_method = ScaleNormalizer.auto_normalize("PAEI", session.paei_scores)
@@ -1188,7 +1302,7 @@ def generate_user_report(session: UserSession) -> tuple[str, str]:
         
         # 2. Генерируем отчет С вопросами для Google Drive
         logger.info("📄 Генерируем полный отчет для Google Drive (с детализацией вопросов)...")
-        result = pdf_generator_gdrive.generate_enhanced_report_with_gdrive(
+        pdf_generator_gdrive.generate_enhanced_report(
             participant_name=session.name,
             test_date=test_date,
             paei_scores=paei_normalized,
@@ -1197,37 +1311,29 @@ def generate_user_report(session: UserSession) -> tuple[str, str]:
             soft_skills_scores=soft_skills_normalized,
             ai_interpretations=interpretations,
             out_path=pdf_path_gdrive,
-            upload_to_gdrive=True,
             user_answers=user_answers  # 🔑 Передаем собранные ответы для полного отчета
         )
-        
-        # Проверяем результат Google Drive загрузки
-        if result and len(result) == 2:
-            local_path, gdrive_link = result
-            logger.info(f"📁 Пользовательский отчет: {pdf_path_user.name}")
-            logger.info(f"📁 Полный отчет сохранен: {pdf_path_gdrive.name}")
-            if gdrive_link:
-                logger.info(f"☁️ Google Drive: {gdrive_link}")
-            else:
-                logger.info("⚠️ Google Drive загрузка не удалась")
-        else:
-            logger.info(f"📁 Пользовательский отчет: {pdf_path_user.name}")
-            logger.info(f"📁 Полный отчет сохранен: {pdf_path_gdrive.name}")
-            logger.warning("⚠️ Проблема с Google Drive интеграцией")
-        
-        # Возвращаем пути к обоим отчетам
-        return str(pdf_path_user), str(pdf_path_gdrive)
+        full_report_complete = True
+
+        return GeneratedReports(
+            user_pdf=pdf_path_user,
+            full_pdf=pdf_path_gdrive,
+        )
             
     except Exception as e:
-        logger.error(f"Ошибка генерации отчета: {e}")
-        raise e
+        logger.error("Ошибка генерации отчета: %s", type(e).__name__)
+        if pdf_path_user and pdf_path_user.exists():
+            pdf_path_user.unlink(missing_ok=True)
+        if pdf_path_gdrive and pdf_path_gdrive.exists() and not full_report_complete:
+            pdf_path_gdrive.unlink(missing_ok=True)
+        raise
     finally:
         # Очищаем временную папку
         try:
             shutil.rmtree(temp_dir, ignore_errors=True)
             logger.debug(f"Временная папка {temp_dir} удалена")
         except Exception as e:
-            logger.warning(f"Не удалось удалить временную папку {temp_dir}: {e}")
+            logger.warning("Не удалось удалить временную папку: %s", type(e).__name__)
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Отмена тестирования"""

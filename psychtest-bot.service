@@ -1,29 +1,54 @@
 [Unit]
 Description=Psychology Test Telegram Bot
-After=network.target
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=600
+StartLimitBurst=5
 
 [Service]
 Type=simple
-User=sergei
-Group=sergei
-WorkingDirectory=/home/sergei/MyApps/PsychTest
-Environment=PYTHONPATH=/home/sergei/MyApps/PsychTest
+User=psychtest
+Group=psychtest
+WorkingDirectory=/opt/projects/psytest
+EnvironmentFile=/etc/psytest/psytest.env
+Environment=PYTHONPATH=/opt/projects/psytest
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/home/sergei/MyApps/PsychTest/.venv/bin/python3 /home/sergei/MyApps/PsychTest/telegram_test_bot.py
-ExecReload=/bin/kill -HUP $MAINPID
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=MPLBACKEND=Agg
+Environment=MPLCONFIGDIR=/var/lib/psytest/matplotlib
+ExecStart=/opt/projects/psytest/.venv/bin/python3 /opt/projects/psytest/telegram_test_bot.py
 
 # Политики перезапуска
-Restart=always
+Restart=on-failure
 RestartSec=5
-StartLimitBurst=5
-StartLimitIntervalSec=600
+TimeoutStartSec=60
+TimeoutStopSec=30
+KillSignal=SIGINT
+UMask=0077
+
+StateDirectory=psytest/work psytest/pending-reports psytest/matplotlib psytest/locks
+StateDirectoryMode=0700
+ReadWritePaths=/var/lib/psytest/work
+ReadWritePaths=/var/lib/psytest/pending-reports
+ReadWritePaths=/var/lib/psytest/matplotlib
+ReadWritePaths=/var/lib/psytest/locks
 
 # Ограничения безопасности
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=/home/sergei/MyApps/PsychTest
-ProtectHome=read-only
+ProtectHome=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 
 # Ограничения ресурсов
 MemoryMax=1G
@@ -34,13 +59,6 @@ TasksMax=100
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=psychtest-bot
-
-# PID файл для контроля единственного экземпляра
-PIDFile=/home/sergei/MyApps/PsychTest/psychtest-bot.pid
-
-# Таймауты
-TimeoutStartSec=60
-TimeoutStopSec=30
 
 [Install]
 WantedBy=multi-user.target

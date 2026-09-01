@@ -113,59 +113,23 @@ class EnhancedPDFReportV2:
         self._setup_fonts()
         
     def _setup_fonts(self):
-        """Настраивает шрифты с поддержкой кириллицы"""
-        try:
-            # Пытаемся использовать системные шрифты Windows с кириллицей
-            import os
-            windows_fonts = "C:/Windows/Fonts/"
-            
-            # Список шрифтов в порядке предпочтения
-            font_candidates = [
-                ("arial.ttf", "Arial-Regular"),
-                ("arialbd.ttf", "Arial-Bold"), 
-                ("times.ttf", "Times-Regular"),
-                ("timesbd.ttf", "Times-Bold"),
-            ]
-            
-            fonts_registered = {}
-            
-            for font_file, font_name in font_candidates:
-                font_path = os.path.join(windows_fonts, font_file)
-                if os.path.exists(font_path):
-                    try:
-                        pdfmetrics.registerFont(TTFont(font_name, font_path))
-                        fonts_registered[font_name] = True
-                        print(f"Зарегистрирован шрифт: {font_name}")
-                    except Exception as e:
-                        print(f"Ошибка регистрации {font_name}: {e}")
-            
-            # Устанавливаем шрифты в зависимости от того, что удалось зарегистрировать
-            if "Arial-Regular" in fonts_registered:
-                DesignConfig.BODY_FONT = "Arial-Regular"
-                DesignConfig.SMALL_FONT = "Arial-Regular"
-                print("Используется Arial для основного текста")
-            else:
-                DesignConfig.BODY_FONT = "Times-Roman"
-                DesignConfig.SMALL_FONT = "Times-Roman"
-                print("Используется Times-Roman для основного текста")
-            
-            if "Arial-Bold" in fonts_registered:
-                DesignConfig.TITLE_FONT = "Arial-Bold"
-                print("Используется Arial-Bold для заголовков")
-            elif "Times-Bold" in fonts_registered:
-                DesignConfig.TITLE_FONT = "Times-Bold"
-                print("Используется Times-Bold для заголовков")
-            else:
-                DesignConfig.TITLE_FONT = "Times-Bold"
-                print("Используется встроенный Times-Bold для заголовков")
-                
-        except Exception as e:
-            print(f"Ошибка настройки шрифтов: {e}")
-            # В случае ошибки используем встроенные шрифты
-            DesignConfig.TITLE_FONT = "Times-Bold"
-            DesignConfig.BODY_FONT = "Times-Roman"
-            DesignConfig.SMALL_FONT = "Times-Roman"
-            print("Используются встроенные шрифты Times")
+        """Register bundled regular and bold DejaVu fonts for Cyrillic output."""
+        font_dir = Path(__file__).resolve().parent / "fonts" / "dejavu-fonts-ttf-2.37" / "ttf"
+        regular_path = font_dir / "DejaVuSans.ttf"
+        bold_path = font_dir / "DejaVuSans-Bold.ttf"
+
+        if not regular_path.is_file() or not bold_path.is_file():
+            raise RuntimeError("Bundled DejaVu fonts are missing")
+
+        registered = set(pdfmetrics.getRegisteredFontNames())
+        if "PsyTest-DejaVuSans" not in registered:
+            pdfmetrics.registerFont(TTFont("PsyTest-DejaVuSans", str(regular_path)))
+        if "PsyTest-DejaVuSans-Bold" not in registered:
+            pdfmetrics.registerFont(TTFont("PsyTest-DejaVuSans-Bold", str(bold_path)))
+
+        DesignConfig.BODY_FONT = "PsyTest-DejaVuSans"
+        DesignConfig.SMALL_FONT = "PsyTest-DejaVuSans"
+        DesignConfig.TITLE_FONT = "PsyTest-DejaVuSans-Bold"
     
     def _add_chart_to_story(
         self,
@@ -860,7 +824,7 @@ class EnhancedPDFReportV2:
     
     def upload_to_google_drive(self, file_path: Path, participant_name: Optional[str] = None) -> Optional[str]:
         """
-        Загрузка PDF в Google Drive (интеграция с oauth_google_drive.py)
+        Upload a PDF using service-account credentials and a configured parent.
         
         Args:
             file_path: Путь к файлу для загрузки
@@ -870,30 +834,14 @@ class EnhancedPDFReportV2:
             Optional[str]: Ссылка на файл в Google Drive или None при ошибке
         """
         try:
-            from oauth_google_drive import upload_to_google_drive_oauth
-            
-            print(f"[UPLOAD] Загрузка PDF отчета в Google Drive: {participant_name or 'неизвестный пользователь'}")
-            
-            # Загружаем в папку с месячной структурой (год/месяц)
-            web_link = upload_to_google_drive_oauth(
-                file_path=str(file_path),
-                folder_name="PsychTest Reports",
-                use_monthly_structure=True
-            )
-            
-            if web_link:
-                print(f"PDF успешно загружен в Google Drive!")
-                print(f"[LINK] Ссылка для просмотра: {web_link}")
-                return web_link
-            else:
-                print("Не удалось загрузить PDF в Google Drive")
-                return None
-                
-        except ImportError:
-            print("Google Drive интеграция недоступна (отсутствует oauth_google_drive)")
-            return None
+            from google_drive_service import GoogleDriveUploader
+
+            result = GoogleDriveUploader.from_environment().upload(Path(file_path))
+            print("PDF успешно загружен в настроенную папку Google Drive")
+            # A file ID confirms the upload even when Drive omits webViewLink.
+            return result.web_view_link or "uploaded"
         except Exception as e:
-            print(f"Ошибка загрузки в Google Drive: {e}")
+            print(f"Ошибка загрузки в Google Drive: {type(e).__name__}")
             return None
     
     def generate_enhanced_report_with_gdrive(self, 
