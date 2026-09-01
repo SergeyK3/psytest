@@ -72,7 +72,26 @@ Dry-run never claims, renames, recovers, or uploads pending files.
 2. Stop `psychtest-bot.service` on Beget. Never run two polling instances with
    the same bot token.
 3. Start `psychtest-bot.service` on PS.kz.
-4. Verify status, journal, memory, Telegram delivery, Drive placement, and queue.
+4. Verify the service with `systemctl is-active psychtest-bot.service`, then
+   verify memory, Telegram delivery, Drive placement, and queue. Never print raw
+   `journalctl` output: Telegram request URLs may contain credentials in older
+   entries. A leak check must suppress matching lines and report only status:
+
+   ```bash
+   if journalctl -u psychtest-bot.service --since today --no-pager \
+     | grep -qE 'api\.telegram\.org/bot[0-9]{6,12}(:|%3[Aa])'; then
+     echo "ERROR: possible Telegram credential in journal"
+   else
+     echo "Journal token check passed"
+   fi
+   ```
+
+   When journal text is required for diagnosis, sanitize it before display:
+
+   ```bash
+   journalctl -u psychtest-bot.service --since today --no-pager \
+     | sed -E 's/[0-9]{6,12}(:|%3[Aa])[A-Za-z0-9_-]{20,}/[REDACTED]/g'
+   ```
 
 ## Pending retry
 

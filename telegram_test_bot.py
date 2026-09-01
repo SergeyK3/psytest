@@ -11,6 +11,7 @@ Telegram бот для психологического тестирования
 # pylance: disable=reportOptionalMemberAccess,reportGeneralTypeIssues
 
 import logging
+import traceback
 import asyncio
 import tempfile
 import shutil
@@ -53,10 +54,86 @@ if not BOT_TOKEN:
 (WAITING_START, WAITING_NAME, PAEI_TESTING, DISC_TESTING, HEXACO_TESTING, SOFT_SKILLS_TESTING) = range(6)
 
 # === НАСТРОЙКА ЛОГИРОВАНИЯ ===
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", 
-    level=logging.INFO
+TELEGRAM_TOKEN_PATTERN = re.compile(
+    r"(?<!\d)\d{6,12}(?::|%3A)[A-Za-z0-9_-]{20,}",
+    flags=re.IGNORECASE,
 )
+TELEGRAM_REDACTION_FILTER_MARKER = "_psytest_telegram_token_redaction_filter"
+
+
+def redact_telegram_tokens(value: str) -> str:
+    """Remove complete Telegram bot tokens from formatted log content."""
+    return TELEGRAM_TOKEN_PATTERN.sub("[REDACTED]", value)
+
+
+def _redact_log_value(value):
+    if isinstance(value, str):
+        return redact_telegram_tokens(value)
+    if isinstance(value, BaseException):
+        return redact_telegram_tokens(str(value))
+    if isinstance(value, tuple):
+        return tuple(_redact_log_value(item) for item in value)
+    if isinstance(value, list):
+        return [_redact_log_value(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _redact_log_value(item) for key, item in value.items()}
+    return value
+
+
+class TelegramTokenRedactionFilter(logging.Filter):
+    """Redact Telegram tokens in messages, arguments, and exception output."""
+
+    _psytest_telegram_token_redaction_filter = True
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.msg = _redact_log_value(record.msg)
+        record.args = _redact_log_value(record.args)
+        if record.exc_info:
+            record.exc_text = redact_telegram_tokens(
+                "".join(traceback.format_exception(*record.exc_info))
+            )
+            record.exc_info = None
+        elif record.exc_text:
+            record.exc_text = redact_telegram_tokens(record.exc_text)
+        if record.stack_info:
+            record.stack_info = redact_telegram_tokens(record.stack_info)
+        return True
+
+
+def install_redacting_log_record_factory() -> None:
+    """Redact every record, including loggers with their own handlers."""
+    current_factory = logging.getLogRecordFactory()
+    if getattr(current_factory, "_psytest_redacts_telegram_tokens", False):
+        return
+
+    def redacting_factory(*args, **kwargs):
+        record = current_factory(*args, **kwargs)
+        TelegramTokenRedactionFilter().filter(record)
+        return record
+
+    redacting_factory._psytest_redacts_telegram_tokens = True
+    logging.setLogRecordFactory(redacting_factory)
+
+
+def configure_secure_logging() -> None:
+    install_redacting_log_record_factory()
+    logging.basicConfig(
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        level=logging.INFO,
+    )
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers:
+        if not any(
+            getattr(active_filter, TELEGRAM_REDACTION_FILTER_MARKER, False)
+            for active_filter in handler.filters
+        ):
+            handler.addFilter(TelegramTokenRedactionFilter())
+
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+
+configure_secure_logging()
 logger = logging.getLogger(__name__)
 
 # === ХРАНИЛИЩЕ ПОЛЬЗОВАТЕЛЕЙ ===
