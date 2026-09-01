@@ -5,8 +5,23 @@ if [[ "${EUID}" -ne 0 ]]; then
   echo "ERROR: run this one-time preparation script as root" >&2
   exit 1
 fi
-if ! id psychtest >/dev/null 2>&1; then
-  useradd --system --home-dir /nonexistent --shell /usr/sbin/nologin psychtest
+if getent passwd psychtest >/dev/null 2>&1; then
+  primary_group="$(id -gn psychtest)"
+  if [[ "${primary_group}" != "psychtest" ]]; then
+    echo "ERROR: existing user psychtest has primary group '${primary_group}', expected 'psychtest'" >&2
+    exit 1
+  fi
+else
+  if ! getent group psychtest >/dev/null 2>&1; then
+    groupadd --system psychtest
+  fi
+  useradd \
+    --system \
+    --gid psychtest \
+    --no-create-home \
+    --home-dir /nonexistent \
+    --shell /usr/sbin/nologin \
+    psychtest
 fi
 
 install -d -o root -g psychtest -m 0750 /var/lib/psytest

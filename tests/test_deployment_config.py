@@ -2,7 +2,9 @@ from pathlib import Path
 
 
 def test_systemd_unit_targets_ps_kz_and_protected_state():
-    unit = Path("psychtest-bot.service").read_text(encoding="utf-8")
+    unit_path = Path("psychtest-bot.service")
+    unit_bytes = unit_path.read_bytes()
+    unit = unit_bytes.decode("utf-8")
 
     required = (
         "User=psychtest",
@@ -23,6 +25,8 @@ def test_systemd_unit_targets_ps_kz_and_protected_state():
         assert setting in unit
     assert unit.count("EnvironmentFile=") == 1
     assert "ReadWritePaths=/opt/projects" not in unit
+    assert not unit_bytes.startswith(b"\xef\xbb\xbf")
+    assert b"\r" not in unit_bytes
 
 
 def test_deploy_is_manual_fast_forward_and_non_destructive():
@@ -61,6 +65,16 @@ def test_credentials_are_configuration_not_repository_dependencies():
     assert "REPORT_WORK_DIR=" in env_example
     assert "GOOGLE_DRIVE_LOCK_PATH=" in env_example
     assert "chmod 0600 /etc/psytest/google-drive-credentials.json" in prepare
+    assert "getent passwd psychtest" in prepare
+    assert "id -gn psychtest" in prepare
+    assert "groupadd --system psychtest" in prepare
+    assert "--gid psychtest" in prepare
+    assert "--no-create-home" in prepare
+    assert "--home-dir /nonexistent" in prepare
+    assert "--shell /usr/sbin/nologin" in prepare
+    assert prepare.index("groupadd --system psychtest") < prepare.index("useradd \\")
+    assert "expected 'psychtest'" in prepare
+    assert "usermod" not in prepare
     assert "/opt/projects/psytest" not in prepare
     assert "reset --hard" not in prepare
     assert "systemctl start" not in prepare
